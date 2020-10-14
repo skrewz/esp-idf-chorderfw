@@ -3,7 +3,7 @@
 # project subdirectory.
 #
 
-PROJECT_NAME := st7789
+PROJECT_NAME := chorderfw
 
 include $(IDF_PATH)/make/project.mk
 
