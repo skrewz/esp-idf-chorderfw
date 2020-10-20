@@ -21,6 +21,7 @@
 #include "esp_gatt_defs.h"
 #include "esp_bt_main.h"
 #include "esp_bt_device.h"
+#include "esp_int_wdt.h"
 
 #include "hid_dev.h"
 #include "config.h"
@@ -32,13 +33,54 @@
 #include "decode_image.h"
 #include "pngle.h"
 
+#include "keycodes.h"
+#include "chordmappings.h"
+
 #define	INTERVAL		400
 #define WAIT	vTaskDelay(INTERVAL)
 
-#define TEST_PIN GPIO_NUM_2
-#define TEST_GND_PIN GPIO_NUM_15
+// GPIO 34-39 do not support pull-up/pull-down and are input-only
+// input only        GPIO_NUM_36 
+#define F_THUMB_PIN  GPIO_NUM_13
+#define C_THUMB_PIN  GPIO_NUM_12
+// input only        GPIO_NUM_39 
+#define N_THUMB_PIN  GPIO_NUM_32
+#define INDEX_PIN    GPIO_NUM_33
+#define MIDDLE_PIN   GPIO_NUM_25
+#define RING_PIN     GPIO_NUM_26
+#define PINKY_PIN    GPIO_NUM_27
+// GND pins by means of output 0. (Too lazy to solder a massive 1-to-7
+// GND dupont wire. 🙃)
+#define GND_PIN0 GPIO_NUM_21
+#define GND_PIN1 GPIO_NUM_22
+#define GND_PIN2 GPIO_NUM_17
+#define GND_PIN3 GPIO_NUM_2
+#define GND_PIN4 GPIO_NUM_15
 
 static const char *TAG = "ST7789";
+
+
+////////////////////////////////////////////////////////////////////////////////
+// For keyboard functionality per se
+////////////////////////////////////////////////////////////////////////////////
+
+enum State {
+  PRESSING,
+  RELEASING,
+};
+
+
+enum Mode {
+  ALPHA,
+  NUMSYM,
+  FUNCTION
+};
+
+bool isCapsLocked = false;
+bool isNumsymLocked = false;
+keymap_t modKeys = 0x00;
+
+enum Mode mode = ALPHA;
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -777,28 +819,355 @@ void ST7789(void *pvParameters)
     }
 }
 
-void Test_pin_interaction (void *pvParameters)
+void set_up_input_pin (int pinnum)
 {
-    gpio_reset_pin(TEST_PIN);
-    gpio_set_direction(TEST_PIN, GPIO_MODE_INPUT);
+    gpio_reset_pin(pinnum);
+    if (ESP_OK != gpio_set_direction(pinnum, GPIO_MODE_INPUT))
+    {
+        ESP_LOGE(__FUNCTION__,"Failure setting pin %d's direction", pinnum);
+    }
+    if (ESP_OK != gpio_set_pull_mode(pinnum, GPIO_PULLUP_ONLY))
+    {
+        ESP_LOGE(__FUNCTION__,"Failure setting pin %d's to pull-up", pinnum);
+    }
+}
+void set_up_gnd_pin (int pinnum)
+{
+    gpio_reset_pin(pinnum);
+    if (ESP_OK != gpio_set_direction(pinnum, GPIO_MODE_OUTPUT))
+    {
+        ESP_LOGE(__FUNCTION__,"Failure setting pin %d's direction", pinnum);
+    }
+    if (ESP_OK != gpio_set_level(pinnum, 0))
+    {
+        ESP_LOGE(__FUNCTION__,"Failure pin %d to level 0", pinnum);
+    }
+}
+uint8_t get_current_state ()
+{
+    uint8_t state = 0;
+    state |= (!gpio_get_level(F_THUMB_PIN) << 0);
+    state |= (!gpio_get_level(C_THUMB_PIN) << 1);
+    state |= (!gpio_get_level(N_THUMB_PIN) << 2);
+    state |= (!gpio_get_level(INDEX_PIN)   << 3);
+    state |= (!gpio_get_level(MIDDLE_PIN)  << 4);
+    state |= (!gpio_get_level(RING_PIN)    << 5);
+    state |= (!gpio_get_level(PINKY_PIN)   << 6);
+    return state;
+}
 
-    gpio_reset_pin(TEST_GND_PIN);
-    gpio_set_direction(TEST_GND_PIN, GPIO_MODE_OUTPUT);
-    gpio_set_level(TEST_GND_PIN, 0);
+void sendRawKey(uint8_t modKey, uint8_t rawKey){
+  uint8_t buf[8];
+  memset(buf,0x00,8);
+  buf[0] = rawKey;
+  esp_hidd_send_keyboard_value(hid_conn_id,modKey,buf,1);
+  ESP_LOGI("sendRawKey","esp_hidd_send_keyboard_value(%d,0x%x,0x%x %x %x %x %x %x %x %x)",
+      hid_conn_id,modKey,
+      buf[0],buf[1],buf[2],buf[3],
+      buf[4],buf[5],buf[6],buf[7]);
+  buf[0] = 0x00;
+  esp_hidd_send_keyboard_value(hid_conn_id,modKey,buf,1);
+}
 
-    uint8_t kbdcmd[] = {28};
-    int last_read = 0;
-    int just_read = 0;
-    while(1) {
-        just_read = gpio_get_level(TEST_PIN);
-        if (1 == just_read && just_read != last_read) {
-            kbdcmd[0] = 28;
-            esp_hidd_send_keyboard_value(hid_conn_id,0,kbdcmd,1);
-            kbdcmd[0] = 0;
-            esp_hidd_send_keyboard_value(hid_conn_id,0,kbdcmd,1);
+void sendControlKey(char *cntrlName){
+  // note: for Volume +/- and the few other keys that take a time to hold, simply add it into the string
+  // for example:
+  //    sendControlKey("VOLUME+,500")
+  // will send Volume up and hold it for half a second
+  //ble.print("AT+BLEHIDCONTROLKEY=");
+  //ble.println(cntrlName);  
+}  
+
+void sendKey(uint8_t keyState){
+  keymap_t theKey;  
+  // Determine the key based on the current mode's keymap
+  if (mode == ALPHA) {
+    theKey = keymap_default[keyState];
+  } else if (mode == NUMSYM) {
+    theKey = keymap_numsym[keyState];
+  } else {
+    theKey = keymap_function[keyState];
+  }
+
+  ESP_LOGI(TAG, "Have theKey=%x", theKey);
+
+  switch (theKey)  {
+  // Handle mode switching - return immediately after the mode has changed
+  // Handle basic mode switching
+  case MODE_NUM:
+    if (mode == NUMSYM) {
+      mode = ALPHA;
+    } else {
+      mode = NUMSYM;
+    }
+    return;
+  case MODE_FUNC:
+    if (mode == FUNCTION) {
+      mode = ALPHA;
+    } else {
+      mode = FUNCTION;
+    }
+    return;
+  case MODE_RESET:
+    mode = ALPHA;
+    modKeys = 0x00;
+    isCapsLocked = false;
+    isNumsymLocked = false;
+    return;
+  case MODE_MRESET:
+    mode = ALPHA;
+    modKeys = 0x00;
+    isCapsLocked = false;
+    isNumsymLocked = false;       
+    //digitalWrite(EnPin, LOW);  // turn off 3.3v regulator enable.
+    return;
+  // Handle mode locks
+  case ENUMKEY_cpslck:
+    if (isCapsLocked){
+      isCapsLocked = false;
+      modKeys = 0x00;
+    } else {
+      isCapsLocked = true;
+      modKeys = 0x02;
+    }
+    return;
+  case MODE_NUMLCK:
+    if (isNumsymLocked){
+      isNumsymLocked = false;
+      mode = ALPHA;
+    } else {
+      isNumsymLocked = true;
+      mode = NUMSYM;
+    }
+    return;
+  // Handle modifier keys toggling
+  case MOD_LCTRL:
+    modKeys = modKeys ^ 0x01;
+    return;
+  case MOD_LSHIFT:
+    modKeys = modKeys ^ 0x02;
+    return;
+  case MOD_LALT:
+    modKeys = modKeys ^ 0x04;
+    return;
+  case MOD_LGUI:
+    modKeys = modKeys ^ 0x08;
+    return;
+  case MOD_RCTRL:
+    modKeys = modKeys ^ 0x10;
+    return;
+  case MOD_RSHIFT:
+    modKeys = modKeys ^ 0x20;
+    return;
+  case MOD_RALT:
+    modKeys = modKeys ^ 0x40;
+    return;
+  case MOD_RGUI:
+    modKeys = modKeys ^ 0x80;
+    return;
+  // Handle special keys
+  case MULTI_NumShift:
+    if (mode == NUMSYM) {
+      mode = ALPHA;
+    } else {
+      mode = NUMSYM;
+    }
+    modKeys = modKeys ^ 0x02;
+    return;
+  case MULTI_CtlAlt:
+    modKeys = modKeys ^ 0x01;
+    modKeys = modKeys ^ 0x04;
+    return;
+  /* Everything after this sends actual keys to the system; break rather than
+     return since we want to reset the modifiers after these keys are sent. */
+  case MACRO_000:
+    sendRawKey(0x00, 0x27);
+    sendRawKey(0x00, 0x27);
+    sendRawKey(0x00, 0x27);
+    break;
+  case MACRO_00:
+    sendRawKey(0x00, 0x27);
+    sendRawKey(0x00, 0x27);
+    break;
+  case MACRO_quotes:
+    sendRawKey(0x02, 0x34);
+    sendRawKey(0x02, 0x34);
+    sendRawKey(0x00, 0x50);
+    break;
+  case MACRO_parens:
+    sendRawKey(0x02, 0x26);
+    sendRawKey(0x02, 0x27);
+    sendRawKey(0x00, 0x50);
+    break;
+  case MACRO_dollar:
+    sendRawKey(0x02, 0x21);
+    break;
+  case MACRO_percent:
+    sendRawKey(0x02, 0x22);
+    break;
+  case MACRO_ampersand:
+    sendRawKey(0x02, 0x24);
+    break;
+  case MACRO_asterisk:
+    sendRawKey(0x02, 0x25);
+    break;
+  case MACRO_question:
+    sendRawKey(0x02, 0x38);
+    break;
+  case MACRO_plus:
+    sendRawKey(0x02, 0x2E);
+    break;
+  case MACRO_openparen:
+    sendRawKey(0x02, 0x26);
+    break;
+  case MACRO_closeparen:
+    sendRawKey(0x02, 0x27);
+    break;
+  case MACRO_opencurly:
+    sendRawKey(0x02, 0x2F);
+    break;
+  case MACRO_closecurly:
+    sendRawKey(0x02, 0x30);
+    break;
+  // Handle Android specific keys
+  case ANDROID_search:
+    sendRawKey(0x04, 0x2C);
+    break;
+  case ANDROID_home:
+    sendRawKey(0x04, 0x29);
+    break;
+  case ANDROID_menu:
+    sendRawKey(0x10, 0x29);
+    break;
+  case ANDROID_back:
+    sendRawKey(0x00, 0x29);
+    break;
+  case ANDROID_dpadcenter:
+    sendRawKey(0x00, 0x5D);
+    break;
+  case MEDIA_playpause:
+    sendControlKey("PLAYPAUSE");
+    break;
+  case MEDIA_stop:
+    sendControlKey("MEDIASTOP");
+    break;
+  case MEDIA_next:
+    sendControlKey("MEDIANEXT");
+    break;
+  case MEDIA_previous:
+    sendControlKey("MEDIAPREVIOUS");
+    break;
+  case MEDIA_volup:
+    sendControlKey("VOLUME+,500");
+    break;
+  case MEDIA_voldn:
+    sendControlKey("VOLUME-,500");
+    break;
+  // Send the key
+  default:
+    sendRawKey(modKeys, theKey);
+    break;
+  }
+
+  modKeys = 0x00;
+  mode = ALPHA;
+  // Reset the modKeys and mode based on locks
+  if (isCapsLocked){
+    modKeys = 0x02;
+  }
+  if (isNumsymLocked){
+    mode = NUMSYM;
+  }
+}
+
+
+void watch_for_key_changes (void *pvParameters)
+{
+    uint8_t kbdcmd[] = {0x00,0x00};
+    uint8_t lastKeyState = 0;
+    bool have_seen_first_stable_reading = false;
+
+    int64_t lastDebounceTime = 0;  // the last time inputs changed
+    int64_t debounceDelay = 10000; // the debounce time; increase if the output flickers
+
+    uint8_t previousStableReading = 0;
+    uint8_t currentStableReading = 0;
+
+    enum State state = RELEASING;
+
+    set_up_gnd_pin(GND_PIN0);
+    set_up_gnd_pin(GND_PIN1);
+    set_up_gnd_pin(GND_PIN2);
+    set_up_gnd_pin(GND_PIN3);
+    set_up_gnd_pin(GND_PIN4);
+    set_up_input_pin(F_THUMB_PIN);
+    set_up_input_pin(C_THUMB_PIN);
+    set_up_input_pin(N_THUMB_PIN);
+    set_up_input_pin(INDEX_PIN);
+    set_up_input_pin(MIDDLE_PIN);
+    set_up_input_pin(RING_PIN);
+    set_up_input_pin(PINKY_PIN);
+
+    while (1) {
+        // Build the current key state.
+        uint8_t keyState = get_current_state();
+
+        if (lastKeyState != keyState) {
+            lastDebounceTime = esp_timer_get_time();
         }
-        last_read = just_read;
-        vTaskDelay(100 / portTICK_RATE_MS);
+
+        if ((esp_timer_get_time() - lastDebounceTime) > debounceDelay) {
+            // whatever the reading is at, it's been there for longer
+            // than the debounce delay, so take it as the actual current state:
+            currentStableReading = keyState;
+        }
+
+        if (previousStableReading != currentStableReading) {
+            //Serial.print(F("currentStableReading now "));
+            //Serial.println(currentStableReading);
+            ESP_LOGI(TAG, "New reading: %s%s%s %s%s%s%s",
+                currentStableReading & (1 << 0) ? "F" : "_",
+                currentStableReading & (1 << 1) ? "C" : "_",
+                currentStableReading & (1 << 2) ? "N" : "_",
+                currentStableReading & (1 << 3) ? "I" : "_",
+                currentStableReading & (1 << 4) ? "M" : "_",
+                currentStableReading & (1 << 5) ? "R" : "_",
+                currentStableReading & (1 << 6) ? "P" : "_"
+            );
+            if (! have_seen_first_stable_reading)
+            {
+            /*
+                bool are_thumbs_down = 0x70 == currentStableReading;
+                if (are_thumbs_down)
+                {
+                    ESP_LOGI(TAG, "Performing a BT factory reset: ");
+                    if ( ! ble.factoryReset() ){
+                        ESP_LOGW(TAG, "Factory reset failed!");
+                    }
+                    ESP_LOGI(TAG, "Resetting Arduino...");
+                    resetFunc();
+                }
+            */
+            }
+            have_seen_first_stable_reading = true;
+            switch (state) {
+              case PRESSING:
+                if (previousStableReading & ~currentStableReading) {
+                  state = RELEASING;
+                  sendKey(previousStableReading);
+                } 
+                break;
+
+              case RELEASING:
+                if (currentStableReading & ~previousStableReading) {
+                  state = PRESSING;
+                }
+                break;
+            }
+            previousStableReading = currentStableReading;
+        }
+        lastKeyState = keyState;
+        vTaskDelay(10 / portTICK_RATE_MS);
     }
 }
 
@@ -953,6 +1322,6 @@ void app_main(void)
     esp_ble_gap_set_security_param(ESP_BLE_SM_SET_RSP_KEY, &rsp_key, sizeof(uint8_t));
 
     xTaskCreate(ST7789, "ST7789", 1024*6, NULL, 2, NULL);
-    xTaskCreate(BLE_muckery, "BLE_muckery", 1024*6, NULL, 2, NULL);
-    xTaskCreate(Test_pin_interaction, "Test_pin_interaction", 1024*3, NULL, 2, NULL);
+    //xTaskCreate(BLE_muckery, "BLE_muckery", 1024*6, NULL, 2, NULL);
+    xTaskCreate(watch_for_key_changes, "watch_for_key_changes", 1024*3, NULL, 2, NULL);
 }
