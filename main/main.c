@@ -33,7 +33,6 @@
 #include "decode_image.h"
 #include "pngle.h"
 
-#include "keycodes.h"
 #include "chordmappings.h"
 
 #define	INTERVAL		400
@@ -846,13 +845,13 @@ void set_up_gnd_pin (int pinnum)
 uint8_t get_current_state ()
 {
     uint8_t state = 0;
-    state |= (!gpio_get_level(F_THUMB_PIN) << 0);
-    state |= (!gpio_get_level(C_THUMB_PIN) << 1);
-    state |= (!gpio_get_level(N_THUMB_PIN) << 2);
+    state |= (!gpio_get_level(F_THUMB_PIN) << 6);
+    state |= (!gpio_get_level(C_THUMB_PIN) << 5);
+    state |= (!gpio_get_level(N_THUMB_PIN) << 4);
     state |= (!gpio_get_level(INDEX_PIN)   << 3);
-    state |= (!gpio_get_level(MIDDLE_PIN)  << 4);
-    state |= (!gpio_get_level(RING_PIN)    << 5);
-    state |= (!gpio_get_level(PINKY_PIN)   << 6);
+    state |= (!gpio_get_level(MIDDLE_PIN)  << 2);
+    state |= (!gpio_get_level(RING_PIN)    << 1);
+    state |= (!gpio_get_level(PINKY_PIN)   << 0);
     return state;
 }
 
@@ -922,7 +921,7 @@ void sendKey(uint8_t keyState){
     //digitalWrite(EnPin, LOW);  // turn off 3.3v regulator enable.
     return;
   // Handle mode locks
-  case ENUMKEY_cpslck:
+  case HID_KEY_CAPS_LOCK:
     if (isCapsLocked){
       isCapsLocked = false;
       modKeys = 0x00;
@@ -1021,7 +1020,7 @@ void sendKey(uint8_t keyState){
     sendRawKey(0x02, 0x26);
     break;
   case MACRO_closeparen:
-    sendRawKey(0x02, 0x27);
+    sendRawKey(0x02, HID_KEY_0);
     break;
   case MACRO_opencurly:
     sendRawKey(0x02, 0x2F);
@@ -1126,13 +1125,13 @@ void watch_for_key_changes (void *pvParameters)
             //Serial.print(F("currentStableReading now "));
             //Serial.println(currentStableReading);
             ESP_LOGI(TAG, "New reading: %s%s%s %s%s%s%s",
-                currentStableReading & (1 << 0) ? "F" : "_",
-                currentStableReading & (1 << 1) ? "C" : "_",
-                currentStableReading & (1 << 2) ? "N" : "_",
+                currentStableReading & (1 << 6) ? "F" : "_",
+                currentStableReading & (1 << 5) ? "C" : "_",
+                currentStableReading & (1 << 4) ? "N" : "_",
                 currentStableReading & (1 << 3) ? "I" : "_",
-                currentStableReading & (1 << 4) ? "M" : "_",
-                currentStableReading & (1 << 5) ? "R" : "_",
-                currentStableReading & (1 << 6) ? "P" : "_"
+                currentStableReading & (1 << 2) ? "M" : "_",
+                currentStableReading & (1 << 1) ? "R" : "_",
+                currentStableReading & (1 << 0) ? "P" : "_"
             );
             if (! have_seen_first_stable_reading)
             {
