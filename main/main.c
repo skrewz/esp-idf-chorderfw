@@ -176,6 +176,19 @@ static void SPIFFS_Directory(char * path) {
 #define CONFIG_BL_GPIO -1
 #endif
 
+TFT_t dev;
+FontxFile fx16G[2],
+ fx24G[2],
+ fx32G[2],
+ fx16M[2],
+ fx24M[2],
+ fx32M[2];
+
+#define DIR_W_TO_E 0
+#define DIR_N_TO_S 1
+#define DIR_E_TO_W 2
+#define DIR_S_TO_N 3
+
 // }}}
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -359,7 +372,7 @@ void sendRawKey(uint8_t modKey, uint8_t rawKey){
   memset(buf,0x00,8);
   buf[0] = rawKey;
   esp_hidd_send_keyboard_value(hid_conn_id,modKey,buf,1);
-  ESP_LOGI("sendRawKey","esp_hidd_send_keyboard_value(%d,0x%x,0x%x %x %x %x %x %x %x %x)",
+  ESP_LOGD("sendRawKey","esp_hidd_send_keyboard_value(%d,0x%x,0x%x %x %x %x %x %x %x %x)",
       hid_conn_id,modKey,
       buf[0],buf[1],buf[2],buf[3],
       buf[4],buf[5],buf[6],buf[7]);
@@ -386,8 +399,6 @@ void sendKey(uint8_t keyState){
   } else {
     theKey = keymap_function[keyState];
   }
-
-  ESP_LOGI(TAG, "Have theKey=%x", theKey);
 
   switch (theKey)  {
   // Handle mode switching - return immediately after the mode has changed
@@ -620,7 +631,7 @@ TickType_t DirectionTest(TFT_t * dev, FontxFile *fx, int width, int height) {
 
     endTick = xTaskGetTickCount();
     diffTick = endTick - startTick;
-    ESP_LOGI(__FUNCTION__, "elapsed time[ms]:%d",diffTick*portTICK_RATE_MS);
+    //ESP_LOGI(__FUNCTION__, "elapsed time[ms]:%d",diffTick*portTICK_RATE_MS);
     return diffTick;
 }
 
@@ -649,30 +660,53 @@ TickType_t FillRectTest(TFT_t * dev, int width, int height) {
 
     endTick = xTaskGetTickCount();
     diffTick = endTick - startTick;
-    ESP_LOGI(__FUNCTION__, "elapsed time[ms]:%d",diffTick*portTICK_RATE_MS);
+    //ESP_LOGI(__FUNCTION__, "elapsed time[ms]:%d",diffTick*portTICK_RATE_MS);
     return diffTick;
+}
+
+void clear_screen(TFT_t * dev) {
+    lcdFillScreen(dev, BLACK);
+}
+
+void render_message(TFT_t * dev, FontxFile *fx, int x_off, int y_off, int direction, unsigned char *message) {
+    // get font width & height
+    uint8_t buffer[FontxGlyphBufSize];
+    uint8_t fontWidth;
+    uint8_t fontHeight;
+    GetFontx(fx, 0, buffer, &fontWidth, &fontHeight);
+    ESP_LOGI(__FUNCTION__,"fontWidth=%d fontHeight=%d",fontWidth,fontHeight);
+
+    uint16_t color;
+
+    color = RED;
+    lcdSetFontDirection(dev, direction);
+    lcdDrawString(dev, fx, 0, fontHeight-1, message, color);
+
+    uint8_t ascii[20];
+
+    color = BLUE;
+    strcpy((char *)ascii, "Direction=2");
+    lcdSetFontDirection(dev, 2);
+    lcdDrawString(dev, fx, (CONFIG_WIDTH-1), (CONFIG_HEIGHT-1)-(fontHeight*1), ascii, color);
 }
 
 void ST7789(void *pvParameters)
 {
     // set font file
-    FontxFile fx16G[2];
-    FontxFile fx24G[2];
-    FontxFile fx32G[2];
-    InitFontx(fx16G,"/spiffs/ILGH16XB.FNT",""); // 8x16Dot Gothic
-    InitFontx(fx24G,"/spiffs/ILGH24XB.FNT",""); // 12x24Dot Gothic
-    InitFontx(fx32G,"/spiffs/ILGH32XB.FNT",""); // 16x32Dot Gothic
+    /* FontxFile fx16G[2]; */
+    /* FontxFile fx24G[2]; */
+    /* FontxFile fx32G[2]; */
+    /* InitFontx(fx16G,"/spiffs/ILGH16XB.FNT",""); // 8x16Dot Gothic */
+    /* InitFontx(fx24G,"/spiffs/ILGH24XB.FNT",""); // 12x24Dot Gothic */
+    /* InitFontx(fx32G,"/spiffs/ILGH32XB.FNT",""); // 16x32Dot Gothic */
 
-    FontxFile fx16M[2];
-    FontxFile fx24M[2];
-    FontxFile fx32M[2];
-    InitFontx(fx16M,"/spiffs/ILMH16XB.FNT",""); // 8x16Dot Mincyo
-    InitFontx(fx24M,"/spiffs/ILMH24XB.FNT",""); // 12x24Dot Mincyo
-    InitFontx(fx32M,"/spiffs/ILMH32XB.FNT",""); // 16x32Dot Mincyo
+    /* FontxFile fx16M[2]; */
+    /* FontxFile fx24M[2]; */
+    /* FontxFile fx32M[2]; */
+    /* InitFontx(fx16M,"/spiffs/ILMH16XB.FNT",""); // 8x16Dot Mincyo */
+    /* InitFontx(fx24M,"/spiffs/ILMH24XB.FNT",""); // 12x24Dot Mincyo */
+    /* InitFontx(fx32M,"/spiffs/ILMH32XB.FNT",""); // 16x32Dot Mincyo */
 
-    TFT_t dev;
-    spi_master_init(&dev, CONFIG_MOSI_GPIO, CONFIG_SCLK_GPIO, CONFIG_CS_GPIO, CONFIG_DC_GPIO, CONFIG_RESET_GPIO, CONFIG_BL_GPIO);
-    lcdInit(&dev, CONFIG_WIDTH, CONFIG_HEIGHT, CONFIG_OFFSETX, CONFIG_OFFSETY);
 
 #if CONFIG_INVERSION
     ESP_LOGI(TAG, "Enable Display Inversion");
@@ -712,7 +746,6 @@ void ST7789(void *pvParameters)
 // {{{
 void watch_for_key_changes (void *pvParameters)
 {
-    uint8_t kbdcmd[] = {0x00,0x00};
     uint8_t lastKeyState = 0;
     bool have_seen_first_stable_reading = false;
 
@@ -763,6 +796,20 @@ void watch_for_key_changes (void *pvParameters)
                 currentStableReading & (1 << 1) ? "R" : "_",
                 currentStableReading & (1 << 0) ? "P" : "_"
             );
+            unsigned char buf[20];
+
+            sprintf((char *)buf,"%s%s%s %s%s%s%s",
+                currentStableReading & (1 << 6) ? "F" : "_",
+                currentStableReading & (1 << 5) ? "C" : "_",
+                currentStableReading & (1 << 4) ? "N" : "_",
+                currentStableReading & (1 << 3) ? "I" : "_",
+                currentStableReading & (1 << 2) ? "M" : "_",
+                currentStableReading & (1 << 1) ? "R" : "_",
+                currentStableReading & (1 << 0) ? "P" : "_"
+            );
+            ESP_LOGI(TAG, "buf contains: %s",buf);
+            clear_screen(&dev);
+            render_message(&dev,fx16G,0,20,DIR_W_TO_E,buf);
             if (! have_seen_first_stable_reading)
             {
             /*
@@ -951,7 +998,22 @@ void app_main(void)
     esp_ble_gap_set_security_param(ESP_BLE_SM_SET_INIT_KEY, &init_key, sizeof(uint8_t));
     esp_ble_gap_set_security_param(ESP_BLE_SM_SET_RSP_KEY, &rsp_key, sizeof(uint8_t));
 
-    xTaskCreate(ST7789, "ST7789", 1024*6, NULL, 2, NULL);
+    spi_master_init(&dev, CONFIG_MOSI_GPIO, CONFIG_SCLK_GPIO, CONFIG_CS_GPIO, CONFIG_DC_GPIO, CONFIG_RESET_GPIO, CONFIG_BL_GPIO);
+
+    // Initialise LCD, set fonts etc
+
+    lcdInit(&dev, CONFIG_WIDTH, CONFIG_HEIGHT, CONFIG_OFFSETX, CONFIG_OFFSETY);
+
+    InitFontx(fx16G,"/spiffs/ILGH16XB.FNT",""); // 8x16Dot Gothic
+    InitFontx(fx24G,"/spiffs/ILGH24XB.FNT",""); // 12x24Dot Gothic
+    InitFontx(fx32G,"/spiffs/ILGH32XB.FNT",""); // 16x32Dot Gothic
+
+    InitFontx(fx16M,"/spiffs/ILMH16XB.FNT",""); // 8x16Dot Mincyo
+    InitFontx(fx24M,"/spiffs/ILMH24XB.FNT",""); // 12x24Dot Mincyo
+    InitFontx(fx32M,"/spiffs/ILMH32XB.FNT",""); // 16x32Dot Mincyo
+
+
+    //xTaskCreate(ST7789, "ST7789", 1024*6, NULL, 2, NULL);
     //xTaskCreate(BLE_muckery, "BLE_muckery", 1024*6, NULL, 2, NULL);
     xTaskCreate(watch_for_key_changes, "watch_for_key_changes", 1024*3, NULL, 2, NULL);
 }
