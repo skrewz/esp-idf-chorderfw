@@ -76,6 +76,11 @@ enum Mode {
   FUNCTION
 };
 
+// the current function that'll take keystate updates:
+// This receives a shifted-into-place bit string of the latest key press
+void (*keystate_handler)(uint8_t keyState);
+
+
 bool isCapsLocked = false;
 bool isNumsymLocked = false;
 keymap_t modKeys = 0x00;
@@ -389,15 +394,20 @@ void sendControlKey(char *cntrlName){
   //ble.println(cntrlName);  
 }  
 
-void sendKey(uint8_t keyState){
+void handle_keystate_update_internally(uint8_t keyState, void (*symbol_handler)(unsigned char *symbol)){
+  keymap_t theKey;  
+  theKey = keymap_default[keyState];
+}
+
+void handle_keystate_update_as_ble(uint8_t keyState){
   keymap_t theKey;  
   // Determine the key based on the current mode's keymap
   if (mode == ALPHA) {
-    theKey = keymap_default[keyState];
+    theKey = keymap[keyState][0];
   } else if (mode == NUMSYM) {
-    theKey = keymap_numsym[keyState];
+    theKey = keymap[keyState][1];
   } else {
-    theKey = keymap_function[keyState];
+    theKey = keymap[keyState][2];
   }
 
   switch (theKey)  {
@@ -681,13 +691,6 @@ void render_message(TFT_t * dev, FontxFile *fx, int x_off, int y_off, int direct
     color = RED;
     lcdSetFontDirection(dev, direction);
     lcdDrawString(dev, fx, 0, fontHeight-1, message, color);
-
-    uint8_t ascii[20];
-
-    color = BLUE;
-    strcpy((char *)ascii, "Direction=2");
-    lcdSetFontDirection(dev, 2);
-    lcdDrawString(dev, fx, (CONFIG_WIDTH-1), (CONFIG_HEIGHT-1)-(fontHeight*1), ascii, color);
 }
 
 void ST7789(void *pvParameters)
@@ -830,7 +833,7 @@ void watch_for_key_changes (void *pvParameters)
               case PRESSING:
                 if (previousStableReading & ~currentStableReading) {
                   state = RELEASING;
-                  sendKey(previousStableReading);
+                  (*keystate_handler)(previousStableReading);
                 } 
                 break;
 
@@ -999,6 +1002,9 @@ void app_main(void)
     esp_ble_gap_set_security_param(ESP_BLE_SM_SET_RSP_KEY, &rsp_key, sizeof(uint8_t));
 
     spi_master_init(&dev, CONFIG_MOSI_GPIO, CONFIG_SCLK_GPIO, CONFIG_CS_GPIO, CONFIG_DC_GPIO, CONFIG_RESET_GPIO, CONFIG_BL_GPIO);
+
+    // Chorder setup
+    keystate_handler = &handle_keystate_update_as_ble;
 
     // Initialise LCD, set fonts etc
 
