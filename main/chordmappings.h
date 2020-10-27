@@ -76,7 +76,7 @@ enum nonkeys {
  *  Index Finger, Middle Finger, Ring Finger, Pinky       *
  *  FCN IMRP                                              *
  **********************************************************/
-const keymap_t keymap_default[128] = {
+const keymap_t keymap_default[128] = { // {{{
   HID_KEY_RESERVED,                 // --- ----  0x00 no keys pressed
   HID_KEY_W,                        // --- ---P  0x01
   HID_KEY_Y,                        // --- --R-  0x02
@@ -220,12 +220,12 @@ const keymap_t keymap_default[128] = {
   HID_KEY_RESERVED,                 // FCN IM-P  0x7D
   HID_KEY_RESERVED,                 // FCN IMR-  0x7E
   HID_KEY_RESERVED                  // FCN IMRP  0x7F
-};
+}; // }}}
 
 /**************************************
  * number/symbols mode                *
  **************************************/
-const keymap_t keymap_numsym[128] = {
+const keymap_t keymap_numsym[128] = { // {{{
   HID_KEY_RESERVED,                 // --- ----  0x00
   HID_KEY_5,                        // --- ---P  0x01
   HID_KEY_4,                        // --- --R-  0x02
@@ -369,12 +369,12 @@ const keymap_t keymap_numsym[128] = {
   HID_KEY_RESERVED,                 // FCN IM-P  0x7D
   HID_KEY_RESERVED,                 // FCN IMR-  0x7E
   HID_KEY_RESERVED                  // FCN IMRP  0x7F
-};
+}; // }}}
 
 /**************************************
  * function key mode                  *
  **************************************/
-const keymap_t keymap_function[128] = {
+const keymap_t keymap_function[128] = { // {{{
   HID_KEY_RESERVED,                 // --- ----  0x00
   HID_KEY_F5,                       // --- ---P  0x01
   HID_KEY_F4,                       // --- --R-  0x02
@@ -518,6 +518,6 @@ const keymap_t keymap_function[128] = {
   HID_KEY_RESERVED,                 // FCN IM-P  0x7D
   HID_KEY_RESERVED,                 // FCN IMR-  0x7E
   HID_KEY_RESERVED                  // FCN IMRP  0x7F
-};
+}; // }}}
 
 // end ChordMappings.h
