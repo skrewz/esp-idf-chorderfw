@@ -263,8 +263,8 @@ symbol_t keymap[128][6] = { // {{{
   HID_KEY_COMMA            , // MODE==ALPHA       for --N -M--  0x14 
   HID_KEY_COMMA            , // MODE==NUMSYM      for --N -M--  0x14 
   HID_KEY_RESERVED         , // MODE==FUNCTION    for --N -M--  0x14 
-  ','                      , // non-BLE shifted   for --N -M--  0x14 
-  '<'                      , // non-BLE unshifted for --N -M--  0x14 
+  '<'                      , // non-BLE shifted   for --N -M--  0x14 
+  ','                      , // non-BLE unshifted for --N -M--  0x14 
   ','                      , // non-BLE numsymed  for --N -M--  0x14 
 },
 {
@@ -279,8 +279,8 @@ symbol_t keymap[128][6] = { // {{{
   HID_KEY_DOT              , // MODE==ALPHA       for --N -MR-  0x16 
   HID_KEY_DOT              , // MODE==NUMSYM      for --N -MR-  0x16 
   HID_KEY_RESERVED         , // MODE==FUNCTION    for --N -MR-  0x16 
-  '.'                      , // non-BLE shifted   for --N -MR-  0x16 
-  '>'                      , // non-BLE unshifted for --N -MR-  0x16 
+  '>'                      , // non-BLE shifted   for --N -MR-  0x16 
+  '.'                      , // non-BLE unshifted for --N -MR-  0x16 
   '.'                      , // non-BLE numsymed  for --N -MR-  0x16 
 },
 {
@@ -646,9 +646,9 @@ symbol_t keymap[128][6] = { // {{{
 {
   HID_KEY_DELETE           , // MODE==ALPHA       for F-- -M--  0x44 
   HID_KEY_DELETE           , // MODE==NUMSYM      for F-- -M--  0x44 
-  HID_KEY_RESERVED         , // MODE==FUNCTION    for F-- -M--  0x44 
-  NONBLE_NOKEY             , // non-BLE shifted   for F-- -M--  0x44 
-  NONBLE_NOKEY             , // non-BLE unshifted for F-- -M--  0x44 
+  HID_KEY_DELETE           , // MODE==FUNCTION    for F-- -M--  0x44 
+  NONBLE_BACKSPACE         , // non-BLE shifted   for F-- -M--  0x44 
+  NONBLE_BACKSPACE         , // non-BLE unshifted for F-- -M--  0x44 
   NONBLE_BACKSPACE         , // non-BLE numsymed  for F-- -M--  0x44 
 },
 {

@@ -38,6 +38,7 @@
 #define	INTERVAL		400
 #define WAIT	vTaskDelay(INTERVAL)
 
+#define INTERNAL_BUFSIZE 200
 // GPIO 34-39 do not support pull-up/pull-down and are input-only
 // input only        GPIO_NUM_36 
 #define F_THUMB_PIN  GPIO_NUM_13
@@ -86,6 +87,7 @@ bool isNumsymLocked = false;
 keymap_t modKeys = 0x00;
 
 enum Mode mode = ALPHA;
+
 
 // }}}
 
@@ -158,15 +160,19 @@ static uint8_t hidd_service_uuid128[] = {
 ////////////////////////////////////////////////////////////////////////////////
 // {{{
 
+void clear_screen(TFT_t * dev);
+
+void render_message(TFT_t * dev, FontxFile *fx, int x_off, int y_off, int direction, unsigned char *message);
+
 static void SPIFFS_Directory(char * path) {
-    DIR* dir = opendir(path);
-    assert(dir != NULL);
-    while (true) {
-        struct dirent*pe = readdir(dir);
-        if (!pe) break;
-        ESP_LOGI(__FUNCTION__,"d_name=%s d_ino=%d d_type=%x", pe->d_name,pe->d_ino, pe->d_type);
-    }
-    closedir(dir);
+	DIR* dir = opendir(path);
+	assert(dir != NULL);
+	while (true) {
+		struct dirent*pe = readdir(dir);
+		if (!pe) break;
+		ESP_LOGI(TAG,"d_name=%s d_ino=%d d_type=%x", pe->d_name,pe->d_ino, pe->d_type);
+	}
+	closedir(dir);
 }
 
 // You have to set these CONFIG value using menuconfig.
@@ -394,9 +400,74 @@ void sendControlKey(char *cntrlName){
   //ble.println(cntrlName);  
 }  
 
-void handle_keystate_update_internally(uint8_t keyState, void (*symbol_handler)(unsigned char *symbol)){
-  keymap_t theKey;  
-  theKey = keymap_default[keyState];
+
+/* Redirector, so that the core logic (shifted not shifted) can be managed
+ * centrally:
+ */
+void handle_keystate_update_internally(uint8_t keyState, void (*symbol_handler)(symbol_t input))
+{
+  static bool is_shifted = false;
+  static bool is_numsymed = false;
+
+  symbol_t symbol = keymap[keyState][is_numsymed ? 5 : (is_shifted? 3 : 4)];
+
+  switch (symbol) {
+    case MOD_LSHIFT:
+      is_shifted = !is_shifted;
+      is_numsymed = false;
+      return;
+    case MOD_RSHIFT:
+      is_shifted = !is_shifted;
+      is_numsymed = false;
+      return;
+    case MODE_NUM:
+      is_shifted = false;
+      is_numsymed = true;
+      return;
+    default:
+      (*symbol_handler)(symbol);
+      is_shifted = false;
+      is_numsymed = false;
+  }
+}
+
+void printing_handler(symbol_t symbol){
+  static char buf[INTERNAL_BUFSIZE];
+  static bool initialised = false;
+  char printingbuf[INTERNAL_BUFSIZE];
+
+  if (!initialised)
+  {
+    buf[0] = '\0';
+    initialised = true;
+  }
+  
+
+  switch (symbol) {
+    case NONBLE_BACKSPACE:
+      buf[0 == strlen(buf) ? 0 : strlen(buf)-1] = '\0';
+      strcpy(printingbuf, buf);
+      break;
+    default:
+      if (symbol < 128) {
+        // Keep replacing the last character if we're at the buffer size:
+        size_t pos = ((strlen(buf) >= INTERNAL_BUFSIZE - 1) ? strlen(buf)-1 : strlen(buf));
+        buf[pos] = (char) symbol;
+        buf[pos+1] = '\0';
+        strcpy(printingbuf, buf);
+      } else {
+        sprintf((char *)printingbuf,"Special: %u",symbol);
+      }
+      break;
+  }
+  ESP_LOGI(TAG,"have buf=%s", buf);
+  clear_screen(&dev);
+  render_message(&dev,fx16G,0,20,DIR_W_TO_E,(unsigned char *)printingbuf);
+
+}
+
+void handle_keystate_update_internally_with_printing(uint8_t keyState){
+  handle_keystate_update_internally(keyState,&printing_handler);
 }
 
 void handle_keystate_update_as_ble(uint8_t keyState){
@@ -604,75 +675,7 @@ void handle_keystate_update_as_ble(uint8_t keyState){
 // Implementing chorder display functionality
 ////////////////////////////////////////////////////////////////////////////////
 // {{{
-TickType_t DirectionTest(TFT_t * dev, FontxFile *fx, int width, int height) {
-    TickType_t startTick, endTick, diffTick;
-    startTick = xTaskGetTickCount();
 
-    // get font width & height
-    uint8_t buffer[FontxGlyphBufSize];
-    uint8_t fontWidth;
-    uint8_t fontHeight;
-    GetFontx(fx, 0, buffer, &fontWidth, &fontHeight);
-    //ESP_LOGI(__FUNCTION__,"fontWidth=%d fontHeight=%d",fontWidth,fontHeight);
-
-    uint16_t color;
-    lcdFillScreen(dev, BLACK);
-    uint8_t ascii[20];
-
-    color = RED;
-    strcpy((char *)ascii, "Direction=0");
-    lcdSetFontDirection(dev, 0);
-    lcdDrawString(dev, fx, 0, fontHeight-1, ascii, color);
-
-    color = BLUE;
-    strcpy((char *)ascii, "Direction=2");
-    lcdSetFontDirection(dev, 2);
-    lcdDrawString(dev, fx, (width-1), (height-1)-(fontHeight*1), ascii, color);
-
-    color = CYAN;
-    strcpy((char *)ascii, "Direction=1");
-    lcdSetFontDirection(dev, 1);
-    lcdDrawString(dev, fx, (width-1)-fontHeight, 0, ascii, color);
-
-    color = GREEN;
-    strcpy((char *)ascii, "Direction=3");
-    lcdSetFontDirection(dev, 3);
-    lcdDrawString(dev, fx, (fontHeight-1), height-1, ascii, color);
-
-    endTick = xTaskGetTickCount();
-    diffTick = endTick - startTick;
-    //ESP_LOGI(__FUNCTION__, "elapsed time[ms]:%d",diffTick*portTICK_RATE_MS);
-    return diffTick;
-}
-
-
-TickType_t FillRectTest(TFT_t * dev, int width, int height) {
-    TickType_t startTick, endTick, diffTick;
-    startTick = xTaskGetTickCount();
-
-    uint16_t color;
-    lcdFillScreen(dev, CYAN);
-
-    uint16_t red;
-    uint16_t green;
-    uint16_t blue;
-    srand( (unsigned int)time( NULL ) );
-    for(int i=1;i<100;i++) {
-        red=rand()%255;
-        green=rand()%255;
-        blue=rand()%255;
-        color=rgb565_conv(red, green, blue);
-        uint16_t xpos=rand()%width;
-        uint16_t ypos=rand()%height;
-        uint16_t size=rand()%(width/5);
-        lcdDrawFillRect(dev, xpos, ypos, xpos+size, ypos+size, color);
-    }
-
-    endTick = xTaskGetTickCount();
-    diffTick = endTick - startTick;
-    //ESP_LOGI(__FUNCTION__, "elapsed time[ms]:%d",diffTick*portTICK_RATE_MS);
-    return diffTick;
-}
 
 void clear_screen(TFT_t * dev) {
     lcdFillScreen(dev, BLACK);
@@ -684,63 +687,36 @@ void render_message(TFT_t * dev, FontxFile *fx, int x_off, int y_off, int direct
     uint8_t fontWidth;
     uint8_t fontHeight;
     GetFontx(fx, 0, buffer, &fontWidth, &fontHeight);
-    ESP_LOGI(__FUNCTION__,"fontWidth=%d fontHeight=%d",fontWidth,fontHeight);
+    ESP_LOGI(__FUNCTION__,"fontWidth=%d, total_width=%d, fontHeight=%d, total_height=%d",fontWidth,CONFIG_WIDTH,fontHeight,CONFIG_HEIGHT);
 
     uint16_t color;
+    unsigned char buf[CONFIG_WIDTH/fontWidth+1]; // space for '\0'
+    size_t offset_into_string = 0;
+    size_t line_number = 0;
+    size_t index_into_line;
 
-    color = RED;
     lcdSetFontDirection(dev, direction);
-    lcdDrawString(dev, fx, 0, fontHeight-1, message, color);
-}
-
-void ST7789(void *pvParameters)
-{
-    // set font file
-    /* FontxFile fx16G[2]; */
-    /* FontxFile fx24G[2]; */
-    /* FontxFile fx32G[2]; */
-    /* InitFontx(fx16G,"/spiffs/ILGH16XB.FNT",""); // 8x16Dot Gothic */
-    /* InitFontx(fx24G,"/spiffs/ILGH24XB.FNT",""); // 12x24Dot Gothic */
-    /* InitFontx(fx32G,"/spiffs/ILGH32XB.FNT",""); // 16x32Dot Gothic */
-
-    /* FontxFile fx16M[2]; */
-    /* FontxFile fx24M[2]; */
-    /* FontxFile fx32M[2]; */
-    /* InitFontx(fx16M,"/spiffs/ILMH16XB.FNT",""); // 8x16Dot Mincyo */
-    /* InitFontx(fx24M,"/spiffs/ILMH24XB.FNT",""); // 12x24Dot Mincyo */
-    /* InitFontx(fx32M,"/spiffs/ILMH32XB.FNT",""); // 16x32Dot Mincyo */
-
-
-#if CONFIG_INVERSION
-    ESP_LOGI(TAG, "Enable Display Inversion");
-    lcdInversionOn(&dev);
-#endif
-
-    while(1) {
-        if (CONFIG_WIDTH >= 240) {
-            DirectionTest(&dev, fx24G, CONFIG_WIDTH, CONFIG_HEIGHT);
-        } else {
-            DirectionTest(&dev, fx16G, CONFIG_WIDTH, CONFIG_HEIGHT);
+    color = RED;
+    while(offset_into_string <= strlen((char *)message))
+    {
+      buf[0] = '\0';
+      for(index_into_line = 0; index_into_line < CONFIG_WIDTH/fontWidth; index_into_line++)
+      {
+        buf[index_into_line+1] = '\0';
+        if ('\n' == message[offset_into_string+index_into_line] || '\0' == message[offset_into_string+index_into_line])
+        {
+          index_into_line++;
+          break;
         }
-        WAIT;
-
-        // random squares
-        FillRectTest(&dev, CONFIG_WIDTH, CONFIG_HEIGHT);
-        WAIT;
-
-        lcdDisplayOff(&dev);
-        lcdBacklightOff(&dev);
-        WAIT;
-        lcdDisplayOn(&dev);
-        lcdBacklightOn(&dev);
-
-    } // end while
-
-    // never reach
-    while (1) {
-        vTaskDelay(2000 / portTICK_PERIOD_MS);
+        buf[index_into_line] = message[offset_into_string+index_into_line];
+      }
+      offset_into_string += index_into_line;
+      lcdDrawString(dev, fx, 0, (line_number * fontHeight) + fontHeight-1, buf, color);
+      line_number++;
     }
+
 }
+
 // }}}
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -799,20 +775,6 @@ void watch_for_key_changes (void *pvParameters)
                 currentStableReading & (1 << 1) ? "R" : "_",
                 currentStableReading & (1 << 0) ? "P" : "_"
             );
-            unsigned char buf[20];
-
-            sprintf((char *)buf,"%s%s%s %s%s%s%s",
-                currentStableReading & (1 << 6) ? "F" : "_",
-                currentStableReading & (1 << 5) ? "C" : "_",
-                currentStableReading & (1 << 4) ? "N" : "_",
-                currentStableReading & (1 << 3) ? "I" : "_",
-                currentStableReading & (1 << 2) ? "M" : "_",
-                currentStableReading & (1 << 1) ? "R" : "_",
-                currentStableReading & (1 << 0) ? "P" : "_"
-            );
-            ESP_LOGI(TAG, "buf contains: %s",buf);
-            clear_screen(&dev);
-            render_message(&dev,fx16G,0,20,DIR_W_TO_E,buf);
             if (! have_seen_first_stable_reading)
             {
             /*
@@ -1004,7 +966,8 @@ void app_main(void)
     spi_master_init(&dev, CONFIG_MOSI_GPIO, CONFIG_SCLK_GPIO, CONFIG_CS_GPIO, CONFIG_DC_GPIO, CONFIG_RESET_GPIO, CONFIG_BL_GPIO);
 
     // Chorder setup
-    keystate_handler = &handle_keystate_update_as_ble;
+    //keystate_handler = &handle_keystate_update_as_ble;
+    keystate_handler = &handle_keystate_update_internally_with_printing;
 
     // Initialise LCD, set fonts etc
 
