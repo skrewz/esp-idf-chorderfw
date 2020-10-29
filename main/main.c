@@ -160,7 +160,27 @@ static uint8_t hidd_service_uuid128[] = {
 ////////////////////////////////////////////////////////////////////////////////
 // {{{
 
-void clear_screen(TFT_t * dev);
+typedef struct {
+  uint16_t background_color;
+  uint16_t foreground_color;
+} lcd_style_t;
+
+typedef struct {
+  char message[INTERNAL_BUFSIZE];
+  char alert[INTERNAL_BUFSIZE];
+} lcd_state_t;
+
+lcd_style_t lcd_style = { 
+  .background_color = BLACK,
+  .foreground_color = BLUE,
+};
+
+lcd_state_t lcd_state = { 
+  .message = "",
+};
+
+
+void clear_lcd(TFT_t * dev);
 
 void render_message(TFT_t * dev, FontxFile *fx, int x_off, int y_off, int direction, unsigned char *message);
 
@@ -432,37 +452,32 @@ void handle_keystate_update_internally(uint8_t keyState, void (*symbol_handler)(
 }
 
 void printing_handler(symbol_t symbol){
-  static char buf[INTERNAL_BUFSIZE];
   static bool initialised = false;
   char printingbuf[INTERNAL_BUFSIZE];
 
   if (!initialised)
   {
-    buf[0] = '\0';
+    lcd_state.message[0] = '\0';
+    lcd_state.alert[0] = '\0';
     initialised = true;
   }
   
 
   switch (symbol) {
     case NONBLE_BACKSPACE:
-      buf[0 == strlen(buf) ? 0 : strlen(buf)-1] = '\0';
-      strcpy(printingbuf, buf);
+      lcd_state.message[0 == strlen(lcd_state.message) ? 0 : strlen(lcd_state.message)-1] = '\0';
       break;
     default:
       if (symbol < 128) {
         // Keep replacing the last character if we're at the buffer size:
-        size_t pos = ((strlen(buf) >= INTERNAL_BUFSIZE - 1) ? strlen(buf)-1 : strlen(buf));
-        buf[pos] = (char) symbol;
-        buf[pos+1] = '\0';
-        strcpy(printingbuf, buf);
+        size_t pos = ((strlen(lcd_state.message) >= INTERNAL_BUFSIZE - 1) ? strlen(lcd_state.message)-1 : strlen(lcd_state.message));
+        lcd_state.message[pos] = (char) symbol;
+        lcd_state.message[pos+1] = '\0';
       } else {
-        sprintf((char *)printingbuf,"Special: %u",symbol);
+        sprintf((char *)lcd_state.alert,"Special: %u",symbol);
       }
       break;
   }
-  ESP_LOGI(TAG,"have buf=%s", buf);
-  clear_screen(&dev);
-  render_message(&dev,fx16G,0,20,DIR_W_TO_E,(unsigned char *)printingbuf);
 
 }
 
@@ -677,8 +692,9 @@ void handle_keystate_update_as_ble(uint8_t keyState){
 // {{{
 
 
-void clear_screen(TFT_t * dev) {
-    lcdFillScreen(dev, BLACK);
+
+void clear_lcd(TFT_t * dev) {
+    lcdFillScreen(dev, lcd_style.background_color);
 }
 
 void render_message(TFT_t * dev, FontxFile *fx, int x_off, int y_off, int direction, unsigned char *message) {
@@ -689,14 +705,12 @@ void render_message(TFT_t * dev, FontxFile *fx, int x_off, int y_off, int direct
     GetFontx(fx, 0, buffer, &fontWidth, &fontHeight);
     ESP_LOGI(__FUNCTION__,"fontWidth=%d, total_width=%d, fontHeight=%d, total_height=%d",fontWidth,CONFIG_WIDTH,fontHeight,CONFIG_HEIGHT);
 
-    uint16_t color;
     unsigned char buf[CONFIG_WIDTH/fontWidth+1]; // space for '\0'
     size_t offset_into_string = 0;
     size_t line_number = 0;
     size_t index_into_line;
 
     lcdSetFontDirection(dev, direction);
-    color = RED;
     while(offset_into_string <= strlen((char *)message))
     {
       buf[0] = '\0';
@@ -711,7 +725,7 @@ void render_message(TFT_t * dev, FontxFile *fx, int x_off, int y_off, int direct
         buf[index_into_line] = message[offset_into_string+index_into_line];
       }
       offset_into_string += index_into_line;
-      lcdDrawString(dev, fx, 0, (line_number * fontHeight) + fontHeight-1, buf, color);
+      lcdDrawString(dev, fx, 0, (line_number * fontHeight) + fontHeight-1, buf, lcd_style.foreground_color);
       line_number++;
     }
 
@@ -810,6 +824,36 @@ void watch_for_key_changes (void *pvParameters)
         lastKeyState = keyState;
         vTaskDelay(10 / portTICK_RATE_MS);
     }
+}
+
+void render_display_task (void *pvParameters)
+{
+  static lcd_state_t last_rendered;
+  static lcd_style_t last_style;
+  lcdInit(&dev, CONFIG_WIDTH, CONFIG_HEIGHT, CONFIG_OFFSETX, CONFIG_OFFSETY);
+  clear_lcd(&dev);
+
+  InitFontx(fx16G,"/spiffs/ILGH16XB.FNT",""); // 8x16Dot Gothic
+  InitFontx(fx24G,"/spiffs/ILGH24XB.FNT",""); // 12x24Dot Gothic
+  InitFontx(fx32G,"/spiffs/ILGH32XB.FNT",""); // 16x32Dot Gothic
+
+  InitFontx(fx16M,"/spiffs/ILMH16XB.FNT",""); // 8x16Dot Mincyo
+  InitFontx(fx24M,"/spiffs/ILMH24XB.FNT",""); // 12x24Dot Mincyo
+  InitFontx(fx32M,"/spiffs/ILMH32XB.FNT",""); // 16x32Dot Mincyo
+
+  while (1) {
+    vTaskDelay(10 / portTICK_RATE_MS);
+
+    // Compare with last display state to stop excessive blinking while re-rendering:
+    // (This'd be best solved through double buffering, butehm...)
+    if (0 != memcmp(&last_rendered,&lcd_state,sizeof(lcd_state_t))
+        || 0 != memcmp(&last_style,&lcd_style,sizeof(lcd_style_t))) {
+      clear_lcd(&dev);
+      render_message(&dev,fx16G,0,20,DIR_W_TO_E,(unsigned char *)lcd_state.message);
+      memcpy(&last_rendered,&lcd_state,sizeof(lcd_state_t));
+      memcpy(&last_style,&lcd_style,sizeof(lcd_style_t));
+    }
+  }
 }
 
 void BLE_muckery(void *pvParameters)
@@ -971,18 +1015,10 @@ void app_main(void)
 
     // Initialise LCD, set fonts etc
 
-    lcdInit(&dev, CONFIG_WIDTH, CONFIG_HEIGHT, CONFIG_OFFSETX, CONFIG_OFFSETY);
-
-    InitFontx(fx16G,"/spiffs/ILGH16XB.FNT",""); // 8x16Dot Gothic
-    InitFontx(fx24G,"/spiffs/ILGH24XB.FNT",""); // 12x24Dot Gothic
-    InitFontx(fx32G,"/spiffs/ILGH32XB.FNT",""); // 16x32Dot Gothic
-
-    InitFontx(fx16M,"/spiffs/ILMH16XB.FNT",""); // 8x16Dot Mincyo
-    InitFontx(fx24M,"/spiffs/ILMH24XB.FNT",""); // 12x24Dot Mincyo
-    InitFontx(fx32M,"/spiffs/ILMH32XB.FNT",""); // 16x32Dot Mincyo
 
 
     //xTaskCreate(ST7789, "ST7789", 1024*6, NULL, 2, NULL);
     //xTaskCreate(BLE_muckery, "BLE_muckery", 1024*6, NULL, 2, NULL);
+    xTaskCreate(render_display_task, "render_display_task", 1024*3, NULL, 2, NULL);
     xTaskCreate(watch_for_key_changes, "watch_for_key_changes", 1024*3, NULL, 2, NULL);
 }
