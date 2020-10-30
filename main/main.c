@@ -77,6 +77,11 @@ enum Mode {
   FUNCTION
 };
 
+enum Operating_mode {
+  OPMODE_NOTETAKING,
+  OPMODE_BLE_KEYBOARD,
+};
+
 // the current function that'll take keystate updates:
 // This receives a shifted-into-place bit string of the latest key press
 void (*keystate_handler)(uint8_t keyState);
@@ -361,6 +366,9 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param
 // Implementing chorder GPIO functionality
 ////////////////////////////////////////////////////////////////////////////////
 // {{{
+
+void switch_to_opmode(enum Operating_mode target);
+
 void set_up_input_pin (int pinnum)
 {
     gpio_reset_pin(pinnum);
@@ -444,6 +452,11 @@ void handle_keystate_update_internally(uint8_t keyState, void (*symbol_handler)(
       is_shifted = false;
       is_numsymed = true;
       return;
+    case MODE_BLE_KEYBOARD:
+      is_shifted = false;
+      is_numsymed = false;
+      switch_to_opmode(OPMODE_BLE_KEYBOARD);
+      return;
     default:
       (*symbol_handler)(symbol);
       is_shifted = false;
@@ -506,6 +519,13 @@ void handle_keystate_update_as_ble(uint8_t keyState){
       mode = NUMSYM;
     }
     return;
+  case MODE_NOTETAKING:
+    mode = ALPHA;
+    modKeys = 0x00;
+    isCapsLocked = false;
+    isNumsymLocked = false;
+    switch_to_opmode(OPMODE_NOTETAKING);
+    break;
   case MODE_FUNC:
     if (mode == FUNCTION) {
       mode = ALPHA;
@@ -684,6 +704,22 @@ void handle_keystate_update_as_ble(uint8_t keyState){
     mode = NUMSYM;
   }
 }
+
+void switch_to_opmode(enum Operating_mode target){
+  switch(target) {
+    case OPMODE_NOTETAKING:
+      keystate_handler = &handle_keystate_update_internally_with_printing;
+      lcd_style.background_color = BLACK;
+      break;
+    case OPMODE_BLE_KEYBOARD:
+      keystate_handler = &handle_keystate_update_as_ble;
+      lcd_style.background_color = BLUE;
+      break;
+    default:
+      ESP_LOGE(TAG,"Wrong switch_to_mode chosen.");
+  }
+}
+
 // }}}
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1010,8 +1046,7 @@ void app_main(void)
     spi_master_init(&dev, CONFIG_MOSI_GPIO, CONFIG_SCLK_GPIO, CONFIG_CS_GPIO, CONFIG_DC_GPIO, CONFIG_RESET_GPIO, CONFIG_BL_GPIO);
 
     // Chorder setup
-    //keystate_handler = &handle_keystate_update_as_ble;
-    keystate_handler = &handle_keystate_update_internally_with_printing;
+    switch_to_opmode(OPMODE_BLE_KEYBOARD);
 
     // Initialise LCD, set fonts etc
 

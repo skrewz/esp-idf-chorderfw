@@ -34,6 +34,8 @@ enum nonkeys {
   MODE_NUMLCK,          // Number/symbols lock
   MODE_FUNC,            // Function key mode
   MODE_FUNCLCK,         // Function key lock
+  MODE_NOTETAKING,      // Switch to non-BLE note taking
+  MODE_BLE_KEYBOARD,    // Switch to BLE keyboard mode
 
 /* Further keys for non-BLE behaviour */
   DIV_NonBLE,
@@ -492,20 +494,20 @@ symbol_t keymap[128][6] = { // {{{
   NONBLE_NOKEY             , // non-BLE numsymed  for -CN ----  0x30 
 },
 {
-  HID_KEY_RESERVED         , // MODE==ALPHA       for -CN ---P  0x31 
-  HID_KEY_RESERVED         , // MODE==NUMSYM      for -CN ---P  0x31 
-  HID_KEY_RESERVED         , // MODE==FUNCTION    for -CN ---P  0x31 
-  NONBLE_NOKEY             , // non-BLE shifted   for -CN ---P  0x31 
-  NONBLE_NOKEY             , // non-BLE unshifted for -CN ---P  0x31 
-  NONBLE_NOKEY             , // non-BLE numsymed  for -CN ---P  0x31 
+  MODE_NOTETAKING          , // MODE==ALPHA       for -CN ---P  0x31 
+  MODE_NOTETAKING          , // MODE==NUMSYM      for -CN ---P  0x31 
+  MODE_NOTETAKING          , // MODE==FUNCTION    for -CN ---P  0x31 
+  MODE_NOTETAKING          , // non-BLE shifted   for -CN ---P  0x31 
+  MODE_NOTETAKING          , // non-BLE unshifted for -CN ---P  0x31 
+  MODE_NOTETAKING          , // non-BLE numsymed  for -CN ---P  0x31 
 },
 {
-  HID_KEY_RESERVED         , // MODE==ALPHA       for -CN --R-  0x32 
-  HID_KEY_RESERVED         , // MODE==NUMSYM      for -CN --R-  0x32 
-  HID_KEY_RESERVED         , // MODE==FUNCTION    for -CN --R-  0x32 
-  NONBLE_NOKEY             , // non-BLE shifted   for -CN --R-  0x32 
-  NONBLE_NOKEY             , // non-BLE unshifted for -CN --R-  0x32 
-  NONBLE_NOKEY             , // non-BLE numsymed  for -CN --R-  0x32 
+  MODE_BLE_KEYBOARD        , // MODE==ALPHA       for -CN --R-  0x32 
+  MODE_BLE_KEYBOARD        , // MODE==NUMSYM      for -CN --R-  0x32 
+  MODE_BLE_KEYBOARD        , // MODE==FUNCTION    for -CN --R-  0x32 
+  MODE_BLE_KEYBOARD        , // non-BLE shifted   for -CN --R-  0x32 
+  MODE_BLE_KEYBOARD        , // non-BLE unshifted for -CN --R-  0x32 
+  MODE_BLE_KEYBOARD        , // non-BLE numsymed  for -CN --R-  0x32 
 },
 {
   HID_KEY_RESERVED         , // MODE==ALPHA       for -CN --RP  0x33 
