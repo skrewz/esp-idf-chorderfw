@@ -140,7 +140,6 @@ struct cmdBuf {
     int bufferLength;
     uint8_t buf[MAX_CMDLEN];
 };
-static uint8_t manufacturer[14]= {'Y','o','u','r',' ','n','a','m','e',' ','h','e','r','e'};
 
 static uint8_t hidd_service_uuid128[] = {
     /* LSB <--------------------------------------------------------------------------------> MSB */
@@ -259,14 +258,15 @@ static esp_ble_adv_data_t hidd_adv_data = {
     .flag = 0x6,
 };
 
+//static uint8_t manufacturer[14]= {'Y','o','u','r',' ','n','a','m','e',' ','h','e','r','e'};
 // config scan response data
 ///@todo Scan response is currently not used. If used, add state handling (adv start) according to ble/gatt_security_server example of Espressif
-static esp_ble_adv_data_t hidd_adv_resp = {
-    .set_scan_rsp = true,
-    .include_name = true,
-    .manufacturer_len = sizeof(manufacturer),
-    .p_manufacturer_data = manufacturer,
-};
+//static esp_ble_adv_data_t hidd_adv_resp = {
+//    .set_scan_rsp = true,
+//    .include_name = true,
+//    .manufacturer_len = sizeof(manufacturer),
+//    .p_manufacturer_data = manufacturer,
+//};
 
 static esp_ble_adv_params_t hidd_adv_params = {
     .adv_int_min        = 0x20,
@@ -311,6 +311,7 @@ static void hidd_event_callback(esp_hidd_cb_event_t event, esp_hidd_cb_param_t *
         case ESP_HIDD_EVENT_BLE_VENDOR_REPORT_WRITE_EVT: {
                                                              ESP_LOGI(TAG, "%s, ESP_HIDD_EVENT_BLE_VENDOR_REPORT_WRITE_EVT", __func__);
                                                              ESP_LOG_BUFFER_HEX(TAG, param->vendor_write.data, param->vendor_write.length);
+                                                             break;
                                                          }
         case ESP_HIDD_EVENT_BLE_LED_OUT_WRITE_EVT: {
                                                        ESP_LOGI(TAG, "%s, ESP_HIDD_EVENT_BLE_LED_OUT_WRITE_EVT, keyboard LED value: %d", __func__, param->vendor_write.data[0]);
