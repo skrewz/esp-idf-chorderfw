@@ -1009,19 +1009,6 @@ void render_display_task (void *pvParameters)
   }
 }
 
-void BLE_muckery(void *pvParameters)
-{
-    while(1) {
-        if (sec_conn) esp_hidd_send_mouse_value(hid_conn_id,0,-MOUSE_SPEED,0,0);
-        vTaskDelay(50);
-        if (sec_conn) esp_hidd_send_mouse_value(hid_conn_id,0,0,MOUSE_SPEED,0);
-        vTaskDelay(50);
-        if (sec_conn) esp_hidd_send_mouse_value(hid_conn_id,0,MOUSE_SPEED,0,0);
-        vTaskDelay(50);
-        if (sec_conn) esp_hidd_send_mouse_value(hid_conn_id,0,0,-MOUSE_SPEED,0);
-        vTaskDelay(50);
-    }
-}
 // }}}
 
 
