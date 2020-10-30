@@ -32,5 +32,26 @@ typedef struct config_data {
     uint8_t locale;
 } config_data_t;
 
+#define INTERNAL_BUFSIZE 200
+
+#define TAG "ST7789"
+
+// GPIO 34-39 do not support pull-up/pull-down and are input-only
+// input only        GPIO_NUM_36 
+#define F_THUMB_PIN  GPIO_NUM_13
+#define C_THUMB_PIN  GPIO_NUM_12
+// input only        GPIO_NUM_39 
+#define N_THUMB_PIN  GPIO_NUM_32
+#define INDEX_PIN    GPIO_NUM_33
+#define MIDDLE_PIN   GPIO_NUM_25
+#define RING_PIN     GPIO_NUM_26
+#define PINKY_PIN    GPIO_NUM_27
+// GND pins by means of output 0. (Too lazy to solder a massive 1-to-7
+// GND dupont wire. 🙃)
+#define GND_PIN0 GPIO_NUM_21
+#define GND_PIN1 GPIO_NUM_22
+#define GND_PIN2 GPIO_NUM_17
+#define GND_PIN3 GPIO_NUM_2
+#define GND_PIN4 GPIO_NUM_15
 
 #endif
