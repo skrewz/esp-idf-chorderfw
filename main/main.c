@@ -20,6 +20,8 @@
 #include "esp_bt_main.h"
 #include "esp_bt_device.h"
 #include "esp_int_wdt.h"
+#include "esp_tls.h"
+#include "esp_http_client.h"
 
 #include "hid_dev.h"
 #include "config.h"
@@ -819,6 +821,60 @@ void watch_for_key_changes (void *pvParameters)
     }
 }
 
+void https_muckery(void *pvParameters)
+{
+  while(1) {
+    esp_err_t _http_event_handle(esp_http_client_event_t *evt)
+    {
+      switch(evt->event_id) {
+        case HTTP_EVENT_ERROR:
+          ESP_LOGI(TAG, "HTTP_EVENT_ERROR");
+          break;
+        case HTTP_EVENT_ON_CONNECTED:
+          ESP_LOGI(TAG, "HTTP_EVENT_ON_CONNECTED");
+          break;
+        case HTTP_EVENT_HEADER_SENT:
+          ESP_LOGI(TAG, "HTTP_EVENT_HEADER_SENT");
+          break;
+        case HTTP_EVENT_ON_HEADER:
+          ESP_LOGI(TAG, "HTTP_EVENT_ON_HEADER");
+          printf("%.*s", evt->data_len, (char*)evt->data);
+          break;
+        case HTTP_EVENT_ON_DATA:
+          ESP_LOGI(TAG, "HTTP_EVENT_ON_DATA, len=%d", evt->data_len);
+          if (!esp_http_client_is_chunked_response(evt->client)) {
+            printf("%.*s", evt->data_len, (char*)evt->data);
+          }
+
+          break;
+        case HTTP_EVENT_ON_FINISH:
+          ESP_LOGI(TAG, "HTTP_EVENT_ON_FINISH");
+          break;
+        case HTTP_EVENT_DISCONNECTED:
+          ESP_LOGI(TAG, "HTTP_EVENT_DISCONNECTED");
+          break;
+      }
+      return ESP_OK;
+    }
+
+    esp_http_client_config_t config = {
+      .url = "http://httpbin.org/redirect/2",
+      .event_handler = _http_event_handle,
+    };
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    esp_err_t err = esp_http_client_perform(client);
+
+    if (err == ESP_OK) {
+      ESP_LOGI(TAG, "Status = %d, content_length = %d",
+          esp_http_client_get_status_code(client),
+          esp_http_client_get_content_length(client));
+    }
+    esp_http_client_cleanup(client);
+
+    vTaskDelay(1000 / portTICK_RATE_MS);
+  }
+}
+
 // }}}
 
 
@@ -938,4 +994,5 @@ void app_main(void)
     //xTaskCreate(BLE_muckery, "BLE_muckery", 1024*6, NULL, 2, NULL);
     xTaskCreate(render_display_task, "render_display_task", 1024*3, NULL, 2, NULL);
     xTaskCreate(watch_for_key_changes, "watch_for_key_changes", 1024*3, NULL, 2, NULL);
+    xTaskCreate(https_muckery, "https_muckery", 1024*6, NULL, 2, NULL);
 }
