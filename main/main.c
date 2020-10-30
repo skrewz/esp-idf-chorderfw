@@ -169,6 +169,8 @@ static uint8_t hidd_service_uuid128[] = {
 typedef struct {
   uint16_t background_color;
   uint16_t foreground_color;
+  uint16_t alert_foreground_color;
+  uint16_t alert_background_color;
 } lcd_style_t;
 
 typedef struct {
@@ -179,16 +181,20 @@ typedef struct {
 lcd_style_t lcd_style = { 
   .background_color = BLACK,
   .foreground_color = BLUE,
+  .alert_foreground_color = WHITE,
+  .alert_background_color = RED,
 };
 
 lcd_state_t lcd_state = { 
   .message = "",
+  .alert = "",
 };
 
+TickType_t last_activity_tick = 0;
 
-void clear_lcd(TFT_t * dev);
+void clear_lcd(TFT_t * dev, uint16_t color);
 
-void render_message(TFT_t * dev, FontxFile *fx, int x_off, int y_off, int direction, unsigned char *message);
+void render_message(TFT_t * dev, FontxFile *fx, uint16_t color, int x_off, int y_off, int direction, unsigned char *message);
 
 static void SPIFFS_Directory(char * path) {
 	DIR* dir = opendir(path);
@@ -438,6 +444,7 @@ void handle_keystate_update_internally(uint8_t keyState, void (*symbol_handler)(
   static bool is_shifted = false;
   static bool is_numsymed = false;
 
+  last_activity_tick = xTaskGetTickCount();
   symbol_t symbol = keymap[keyState][is_numsymed ? 6 : (is_shifted? 4 : 4)];
 
   switch (symbol) {
@@ -504,6 +511,9 @@ void handle_keystate_update_internally_with_printing(uint8_t keyState){
 }
 
 void handle_keystate_update_as_ble_keyboard(uint8_t keyState){
+
+  last_activity_tick = xTaskGetTickCount();
+
   keymap_t theKey;  
   // Determine the key based on the current mode's keymap
   if (mode == ALPHA) {
@@ -721,6 +731,7 @@ void handle_keystate_update_as_ble_mouse(uint8_t keyState){
   static size_t jump = 8;
   keymap_t theKey;  
 
+  last_activity_tick = xTaskGetTickCount();
   theKey = keymap[keyState][3];
 
   switch (theKey)  {
@@ -752,15 +763,14 @@ void handle_keystate_update_as_ble_mouse(uint8_t keyState){
       break;
     case BLEMOUSE_FURTHER:
       jump = 127 > 2 * jump ? 2 * jump : 127;
-      ESP_LOGI(TAG,"Now have jump=%d",jump);
+      sprintf(lcd_state.alert,"Jump: %d",jump);
       break;
     case BLEMOUSE_SHORTER:
       jump = 0 < jump / 2 ? jump / 2 : 1;
-      ESP_LOGI(TAG,"Now have jump=%d",jump);
+      sprintf(lcd_state.alert,"Jump: %d",jump);
       break;
-    // Send the key
     default:
-      // TODO: add error output here
+      strcpy(lcd_state.alert,"Unknown\nkey");
       break;
   }
 
@@ -803,11 +813,11 @@ void switch_to_opmode(enum Operating_mode target){
 
 
 
-void clear_lcd(TFT_t * dev) {
-    lcdFillScreen(dev, lcd_style.background_color);
+void clear_lcd(TFT_t * dev, uint16_t color) {
+    lcdFillScreen(dev, color);
 }
 
-void render_message(TFT_t * dev, FontxFile *fx, int x_off, int y_off, int direction, unsigned char *message) {
+void render_message(TFT_t * dev, FontxFile *fx, uint16_t color, int x_off, int y_off, int direction, unsigned char *message) {
     // get font width & height
     uint8_t buffer[FontxGlyphBufSize];
     uint8_t fontWidth;
@@ -835,7 +845,7 @@ void render_message(TFT_t * dev, FontxFile *fx, int x_off, int y_off, int direct
         buf[index_into_line] = message[offset_into_string+index_into_line];
       }
       offset_into_string += index_into_line;
-      lcdDrawString(dev, fx, 0, (line_number * fontHeight) + fontHeight-1, buf, lcd_style.foreground_color);
+      lcdDrawString(dev, fx, 0, (line_number * fontHeight) + fontHeight-1, buf, color);
       line_number++;
     }
 
@@ -940,8 +950,15 @@ void render_display_task (void *pvParameters)
 {
   static lcd_state_t last_rendered;
   static lcd_style_t last_style;
+  static TickType_t last_alert_tick = 0;
+
+  if (0 == last_activity_tick)
+    last_activity_tick = xTaskGetTickCount();
+  if (0 == last_alert_tick)
+    last_alert_tick = xTaskGetTickCount();
+
   lcdInit(&dev, CONFIG_WIDTH, CONFIG_HEIGHT, CONFIG_OFFSETX, CONFIG_OFFSETY);
-  clear_lcd(&dev);
+  clear_lcd(&dev,lcd_style.background_color);
 
   InitFontx(fx16G,"/spiffs/ILGH16XB.FNT",""); // 8x16Dot Gothic
   InitFontx(fx24G,"/spiffs/ILGH24XB.FNT",""); // 12x24Dot Gothic
@@ -952,16 +969,41 @@ void render_display_task (void *pvParameters)
   InitFontx(fx32M,"/spiffs/ILMH32XB.FNT",""); // 16x32Dot Mincyo
 
   while (1) {
-    vTaskDelay(10 / portTICK_RATE_MS);
+    vTaskDelay(100 / portTICK_RATE_MS);
+
 
     // Compare with last display state to stop excessive blinking while re-rendering:
     // (This'd be best solved through double buffering, butehm...)
     if (0 != memcmp(&last_rendered,&lcd_state,sizeof(lcd_state_t))
         || 0 != memcmp(&last_style,&lcd_style,sizeof(lcd_style_t))) {
-      clear_lcd(&dev);
-      render_message(&dev,fx16G,0,20,DIR_W_TO_E,(unsigned char *)lcd_state.message);
+      lcdDisplayOn(&dev);
+      lcdBacklightOn(&dev);
+      last_activity_tick = xTaskGetTickCount();
+      if (0 != strlen(lcd_state.alert)) {
+        clear_lcd(&dev,lcd_style.alert_background_color);
+        render_message(&dev,fx24G,lcd_style.alert_foreground_color,0,20,DIR_W_TO_E,(unsigned char *)lcd_state.alert);
+        last_alert_tick = xTaskGetTickCount();
+      } else {
+        clear_lcd(&dev,lcd_style.background_color);
+        render_message(&dev,fx16G,lcd_style.foreground_color,0,20,DIR_W_TO_E,(unsigned char *)lcd_state.message);
+      }
       memcpy(&last_rendered,&lcd_state,sizeof(lcd_state_t));
       memcpy(&last_style,&lcd_style,sizeof(lcd_style_t));
+    }
+
+    int ms_since_last_update = (xTaskGetTickCount()-last_activity_tick)*portTICK_RATE_MS;
+    int ms_since_last_alert = (xTaskGetTickCount()-last_alert_tick)*portTICK_RATE_MS;
+    ESP_LOGI(__FUNCTION__, "update[ms]:%d, alert[ms]:%d",ms_since_last_update,ms_since_last_alert);
+
+    if (ms_since_last_alert > 5000) {
+      strcpy(lcd_state.alert,"");
+    }
+    if (ms_since_last_update < 10000) {
+      lcdDisplayOn(&dev);
+      lcdBacklightOn(&dev);
+    } else {
+      lcdDisplayOff(&dev);
+      lcdBacklightOff(&dev);
     }
   }
 }
