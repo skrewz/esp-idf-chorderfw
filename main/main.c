@@ -80,6 +80,7 @@ enum Mode {
 enum Operating_mode {
   OPMODE_NOTETAKING,
   OPMODE_BLE_KEYBOARD,
+  OPMODE_BLE_MOUSE,
 };
 
 // the current function that'll take keystate updates:
@@ -437,7 +438,7 @@ void handle_keystate_update_internally(uint8_t keyState, void (*symbol_handler)(
   static bool is_shifted = false;
   static bool is_numsymed = false;
 
-  symbol_t symbol = keymap[keyState][is_numsymed ? 5 : (is_shifted? 3 : 4)];
+  symbol_t symbol = keymap[keyState][is_numsymed ? 6 : (is_shifted? 4 : 4)];
 
   switch (symbol) {
     case MOD_LSHIFT:
@@ -457,6 +458,11 @@ void handle_keystate_update_internally(uint8_t keyState, void (*symbol_handler)(
       is_numsymed = false;
       switch_to_opmode(OPMODE_BLE_KEYBOARD);
       return;
+    case MODE_BLE_MOUSE:
+      is_shifted = false;
+      is_numsymed = false;
+      switch_to_opmode(OPMODE_BLE_MOUSE);
+      return;
     default:
       (*symbol_handler)(symbol);
       is_shifted = false;
@@ -466,7 +472,6 @@ void handle_keystate_update_internally(uint8_t keyState, void (*symbol_handler)(
 
 void printing_handler(symbol_t symbol){
   static bool initialised = false;
-  char printingbuf[INTERNAL_BUFSIZE];
 
   if (!initialised)
   {
@@ -498,7 +503,7 @@ void handle_keystate_update_internally_with_printing(uint8_t keyState){
   handle_keystate_update_internally(keyState,&printing_handler);
 }
 
-void handle_keystate_update_as_ble(uint8_t keyState){
+void handle_keystate_update_as_ble_keyboard(uint8_t keyState){
   keymap_t theKey;  
   // Determine the key based on the current mode's keymap
   if (mode == ALPHA) {
@@ -525,6 +530,13 @@ void handle_keystate_update_as_ble(uint8_t keyState){
     isCapsLocked = false;
     isNumsymLocked = false;
     switch_to_opmode(OPMODE_NOTETAKING);
+    break;
+  case MODE_BLE_MOUSE:
+    mode = ALPHA;
+    modKeys = 0x00;
+    isCapsLocked = false;
+    isNumsymLocked = false;
+    switch_to_opmode(OPMODE_BLE_MOUSE);
     break;
   case MODE_FUNC:
     if (mode == FUNCTION) {
@@ -705,6 +717,64 @@ void handle_keystate_update_as_ble(uint8_t keyState){
   }
 }
 
+void handle_keystate_update_as_ble_mouse(uint8_t keyState){
+  static size_t jump = 8;
+  keymap_t theKey;  
+
+  theKey = keymap[keyState][3];
+
+  switch (theKey)  {
+    case MODE_NOTETAKING:
+      jump = 8;
+      switch_to_opmode(OPMODE_NOTETAKING);
+      return;
+    case MODE_BLE_KEYBOARD:
+      jump = 8;
+      switch_to_opmode(OPMODE_BLE_KEYBOARD);
+      return;
+    case BLEMOUSE_LEFT:
+      if (sec_conn) esp_hidd_send_mouse_value(hid_conn_id,0,-jump,0,0);
+      break;
+    case BLEMOUSE_DOWN:
+      if (sec_conn) esp_hidd_send_mouse_value(hid_conn_id,0,0,-jump,0);
+      break;
+    case BLEMOUSE_UP:
+      if (sec_conn) esp_hidd_send_mouse_value(hid_conn_id,0,0,jump,0);
+      break;
+    case BLEMOUSE_RIGHT:
+      if (sec_conn) esp_hidd_send_mouse_value(hid_conn_id,0,jump,0,0);
+      break;
+    case BLEMOUSE_1CLICK:
+      if (sec_conn) {
+        esp_hidd_send_mouse_value(hid_conn_id,1,0,0,0);
+        esp_hidd_send_mouse_value(hid_conn_id,0,0,0,0);
+      }
+      break;
+    case BLEMOUSE_FURTHER:
+      jump = 127 > 2 * jump ? 2 * jump : 127;
+      ESP_LOGI(TAG,"Now have jump=%d",jump);
+      break;
+    case BLEMOUSE_SHORTER:
+      jump = 0 < jump / 2 ? jump / 2 : 1;
+      ESP_LOGI(TAG,"Now have jump=%d",jump);
+      break;
+    // Send the key
+    default:
+      // TODO: add error output here
+      break;
+  }
+
+  modKeys = 0x00;
+  mode = ALPHA;
+  // Reset the modKeys and mode based on locks
+  if (isCapsLocked){
+    modKeys = 0x02;
+  }
+  if (isNumsymLocked){
+    mode = NUMSYM;
+  }
+}
+
 void switch_to_opmode(enum Operating_mode target){
   switch(target) {
     case OPMODE_NOTETAKING:
@@ -712,8 +782,12 @@ void switch_to_opmode(enum Operating_mode target){
       lcd_style.background_color = BLACK;
       break;
     case OPMODE_BLE_KEYBOARD:
-      keystate_handler = &handle_keystate_update_as_ble;
+      keystate_handler = &handle_keystate_update_as_ble_keyboard;
       lcd_style.background_color = BLUE;
+      break;
+    case OPMODE_BLE_MOUSE:
+      keystate_handler = &handle_keystate_update_as_ble_mouse;
+      lcd_style.background_color = CYAN;
       break;
     default:
       ESP_LOGE(TAG,"Wrong switch_to_mode chosen.");
