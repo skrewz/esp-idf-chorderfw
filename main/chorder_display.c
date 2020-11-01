@@ -164,7 +164,6 @@ void render_display_task (void *pvParameters)
 
     int ms_since_last_update = (xTaskGetTickCount()-display_timeout_last_activity)*portTICK_RATE_MS;
     int ms_since_last_alert = (xTaskGetTickCount()-last_alert_tick)*portTICK_RATE_MS;
-    ESP_LOGI(__FUNCTION__, "update[ms]:%d, alert[ms]:%d",ms_since_last_update,ms_since_last_alert);
 
     if (ms_since_last_alert > 5000) {
       strcpy(lcd_state.alert,"");
