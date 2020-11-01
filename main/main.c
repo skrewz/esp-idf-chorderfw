@@ -825,6 +825,10 @@ void watch_for_key_changes (void *pvParameters)
 void https_muckery(void *pvParameters)
 {
   while(1) {
+    vTaskDelay(10000 / portTICK_RATE_MS);
+    if (! wifi_is_connected())
+      continue;
+
     esp_err_t _http_event_handle(esp_http_client_event_t *evt)
     {
       switch(evt->event_id) {
@@ -859,7 +863,7 @@ void https_muckery(void *pvParameters)
     }
 
     esp_http_client_config_t config = {
-      .url = "http://httpbin.org/redirect/2",
+      .url = "https://httpbin.org/get",
       .event_handler = _http_event_handle,
     };
     esp_http_client_handle_t client = esp_http_client_init(&config);
@@ -872,7 +876,6 @@ void https_muckery(void *pvParameters)
     }
     esp_http_client_cleanup(client);
 
-    vTaskDelay(1000 / portTICK_RATE_MS);
   }
 }
 
@@ -997,5 +1000,5 @@ void app_main(void)
     //xTaskCreate(BLE_muckery, "BLE_muckery", 1024*6, NULL, 2, NULL);
     xTaskCreate(render_display_task, "render_display_task", 1024*3, NULL, 2, NULL);
     xTaskCreate(watch_for_key_changes, "watch_for_key_changes", 1024*3, NULL, 2, NULL);
-    //xTaskCreate(https_muckery, "https_muckery", 1024*6, NULL, 2, NULL);
+    xTaskCreate(https_muckery, "https_muckery", 1024*6, NULL, 2, NULL);
 }
