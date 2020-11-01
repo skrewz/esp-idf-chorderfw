@@ -1,5 +1,5 @@
-#include "st7789.h"
 #include <stdint.h>
+#include "st7789.h"
 #include "config.h"
 
 #define DIR_W_TO_E 0
@@ -21,15 +21,17 @@
 
 void SPIFFS_Directory(char * path);
 void initialize_lcd();
-void clear_lcd(TFT_t * dev, uint16_t color);
+void clear_lcd(uint16_t color);
 void render_message(
-    TFT_t * dev, 
     FontxFile *fx, 
     uint16_t color, 
     int x_off, 
     int y_off, 
     int direction, 
     unsigned char *message);
+
+void render_display_task (void *pvParameters);
+
 
 
 typedef struct {
@@ -44,3 +46,7 @@ typedef struct {
   char alert[INTERNAL_BUFSIZE];
 } lcd_state_t;
 
+extern lcd_style_t lcd_style;
+extern lcd_state_t lcd_state;
+
+extern TickType_t display_timeout_last_activity;

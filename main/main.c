@@ -12,8 +12,6 @@
 #include "esp_bt.h"
 
 #include "esp_err.h"
-#include "esp_vfs.h"
-#include "esp_spiffs.h"
 
 #include "esp_bt_defs.h"
 #include "esp_gap_ble_api.h"
@@ -143,19 +141,6 @@ static uint8_t hidd_service_uuid128[] = {
 ////////////////////////////////////////////////////////////////////////////////
 // {{{
 
-lcd_style_t lcd_style = { 
-  .background_color = BLACK,
-  .foreground_color = BLUE,
-  .alert_foreground_color = WHITE,
-  .alert_background_color = RED,
-};
-
-lcd_state_t lcd_state = { 
-  .message = "",
-  .alert = "",
-};
-
-TickType_t last_activity_tick = 0;
 
 TFT_t dev;
 FontxFile fx16G[2],
@@ -379,7 +364,7 @@ void handle_keystate_update_internally(uint8_t keyState, void (*symbol_handler)(
   static bool is_shifted = false;
   static bool is_numsymed = false;
 
-  last_activity_tick = xTaskGetTickCount();
+  display_timeout_last_activity = xTaskGetTickCount();
   symbol_t symbol = keymap[keyState][is_numsymed ? 6 : (is_shifted? 4 : 4)];
 
   switch (symbol) {
@@ -447,7 +432,7 @@ void handle_keystate_update_internally_with_printing(uint8_t keyState){
 
 void handle_keystate_update_as_ble_keyboard(uint8_t keyState){
 
-  last_activity_tick = xTaskGetTickCount();
+  display_timeout_last_activity = xTaskGetTickCount();
 
   keymap_t theKey;  
   // Determine the key based on the current mode's keymap
@@ -666,7 +651,7 @@ void handle_keystate_update_as_ble_mouse(uint8_t keyState){
   static size_t jump = 8;
   keymap_t theKey;  
 
-  last_activity_tick = xTaskGetTickCount();
+  display_timeout_last_activity = xTaskGetTickCount();
   theKey = keymap[keyState][3];
 
   switch (theKey)  {
@@ -834,73 +819,12 @@ void watch_for_key_changes (void *pvParameters)
     }
 }
 
-void render_display_task (void *pvParameters)
-{
-  static lcd_state_t last_rendered;
-  static lcd_style_t last_style;
-  static TickType_t last_alert_tick = 0;
-
-  if (0 == last_activity_tick)
-    last_activity_tick = xTaskGetTickCount();
-  if (0 == last_alert_tick)
-    last_alert_tick = xTaskGetTickCount();
-
-  lcdInit(&dev, CONFIG_WIDTH, CONFIG_HEIGHT, CONFIG_OFFSETX, CONFIG_OFFSETY);
-  clear_lcd(&dev,lcd_style.background_color);
-
-  InitFontx(fx16G,"/spiffs/ILGH16XB.FNT",""); // 8x16Dot Gothic
-  InitFontx(fx24G,"/spiffs/ILGH24XB.FNT",""); // 12x24Dot Gothic
-  InitFontx(fx32G,"/spiffs/ILGH32XB.FNT",""); // 16x32Dot Gothic
-
-  InitFontx(fx16M,"/spiffs/ILMH16XB.FNT",""); // 8x16Dot Mincyo
-  InitFontx(fx24M,"/spiffs/ILMH24XB.FNT",""); // 12x24Dot Mincyo
-  InitFontx(fx32M,"/spiffs/ILMH32XB.FNT",""); // 16x32Dot Mincyo
-
-  while (1) {
-    vTaskDelay(100 / portTICK_RATE_MS);
-
-
-    // Compare with last display state to stop excessive blinking while re-rendering:
-    // (This'd be best solved through double buffering, butehm...)
-    if (0 != memcmp(&last_rendered,&lcd_state,sizeof(lcd_state_t))
-        || 0 != memcmp(&last_style,&lcd_style,sizeof(lcd_style_t))) {
-      lcdDisplayOn(&dev);
-      lcdBacklightOn(&dev);
-      last_activity_tick = xTaskGetTickCount();
-      if (0 != strlen(lcd_state.alert)) {
-        clear_lcd(&dev,lcd_style.alert_background_color);
-        render_message(&dev,fx24G,lcd_style.alert_foreground_color,0,20,DIR_W_TO_E,(unsigned char *)lcd_state.alert);
-        last_alert_tick = xTaskGetTickCount();
-      } else {
-        clear_lcd(&dev,lcd_style.background_color);
-        render_message(&dev,fx16G,lcd_style.foreground_color,0,20,DIR_W_TO_E,(unsigned char *)lcd_state.message);
-      }
-      memcpy(&last_rendered,&lcd_state,sizeof(lcd_state_t));
-      memcpy(&last_style,&lcd_style,sizeof(lcd_style_t));
-    }
-
-    int ms_since_last_update = (xTaskGetTickCount()-last_activity_tick)*portTICK_RATE_MS;
-    int ms_since_last_alert = (xTaskGetTickCount()-last_alert_tick)*portTICK_RATE_MS;
-    ESP_LOGI(__FUNCTION__, "update[ms]:%d, alert[ms]:%d",ms_since_last_update,ms_since_last_alert);
-
-    if (ms_since_last_alert > 5000) {
-      strcpy(lcd_state.alert,"");
-    }
-    if (ms_since_last_update < 10000) {
-      lcdDisplayOn(&dev);
-      lcdBacklightOn(&dev);
-    } else {
-      lcdDisplayOff(&dev);
-      lcdBacklightOff(&dev);
-    }
-  }
-}
-
 // }}}
 
 
 void app_main(void)
 {
+    esp_err_t ret;
     initialize_lcd();
     // Initialize FreeRTOS elements
     eventgroup_system = xEventGroupCreate();

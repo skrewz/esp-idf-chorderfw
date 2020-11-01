@@ -5,8 +5,34 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include "esp_log.h"
+#include "esp_vfs.h"
+#include "esp_spiffs.h"
 #include "chorder_display.h"
+#include "freertos/task.h"
 #include "config.h"
+
+FontxFile fx16G[2],
+ fx24G[2],
+ fx32G[2],
+ fx16M[2],
+ fx24M[2],
+ fx32M[2];
+
+TFT_t dev;
+
+lcd_style_t lcd_style = { 
+  .background_color = BLACK,
+  .foreground_color = BLUE,
+  .alert_foreground_color = WHITE,
+  .alert_background_color = RED,
+};
+
+lcd_state_t lcd_state = { 
+  .message = "",
+  .alert = "",
+};
+
+TickType_t display_timeout_last_activity = 0;
 
 void initialize_lcd() {
   ESP_LOGI(TAG, "Initializing SPIFFS");
@@ -54,11 +80,11 @@ void SPIFFS_Directory(char * path) {
   closedir(dir);
 }
 
-void clear_lcd(TFT_t * dev, uint16_t color) {
-  lcdFillScreen(dev, color);
+void clear_lcd(uint16_t color) {
+  lcdFillScreen(&dev, color);
 }
 
-void render_message(TFT_t * dev, FontxFile *fx, uint16_t color, int x_off, int y_off, int direction, unsigned char *message) {
+void render_message(FontxFile *fx, uint16_t color, int x_off, int y_off, int direction, unsigned char *message) {
   // get font width & height
   uint8_t buffer[FontxGlyphBufSize];
   uint8_t fontWidth;
@@ -71,7 +97,7 @@ void render_message(TFT_t * dev, FontxFile *fx, uint16_t color, int x_off, int y
   size_t line_number = 0;
   size_t index_into_line;
 
-  lcdSetFontDirection(dev, direction);
+  lcdSetFontDirection(&dev, direction);
   while(offset_into_string <= strlen((char *)message))
   {
     buf[0] = '\0';
@@ -86,7 +112,69 @@ void render_message(TFT_t * dev, FontxFile *fx, uint16_t color, int x_off, int y
       buf[index_into_line] = message[offset_into_string+index_into_line];
     }
     offset_into_string += index_into_line;
-    lcdDrawString(dev, fx, 0, (line_number * fontHeight) + fontHeight-1, buf, color);
+    lcdDrawString(&dev, fx, 0, (line_number * fontHeight) + fontHeight-1, buf, color);
     line_number++;
+  }
+}
+
+void render_display_task (void *pvParameters)
+{
+  static lcd_state_t last_rendered;
+  static lcd_style_t last_style;
+  static TickType_t last_alert_tick = 0;
+
+  if (0 == display_timeout_last_activity)
+    display_timeout_last_activity = xTaskGetTickCount();
+  if (0 == last_alert_tick)
+    last_alert_tick = xTaskGetTickCount();
+
+  lcdInit(&dev, CONFIG_WIDTH, CONFIG_HEIGHT, CONFIG_OFFSETX, CONFIG_OFFSETY);
+  clear_lcd(lcd_style.background_color);
+
+  InitFontx(fx16G,"/spiffs/ILGH16XB.FNT",""); // 8x16Dot Gothic
+  InitFontx(fx24G,"/spiffs/ILGH24XB.FNT",""); // 12x24Dot Gothic
+  InitFontx(fx32G,"/spiffs/ILGH32XB.FNT",""); // 16x32Dot Gothic
+
+  InitFontx(fx16M,"/spiffs/ILMH16XB.FNT",""); // 8x16Dot Mincyo
+  InitFontx(fx24M,"/spiffs/ILMH24XB.FNT",""); // 12x24Dot Mincyo
+  InitFontx(fx32M,"/spiffs/ILMH32XB.FNT",""); // 16x32Dot Mincyo
+
+  while (1) {
+    vTaskDelay(100 / portTICK_RATE_MS);
+
+
+    // Compare with last display state to stop excessive blinking while re-rendering:
+    // (This'd be best solved through double buffering, butehm...)
+    if (0 != memcmp(&last_rendered,&lcd_state,sizeof(lcd_state_t))
+        || 0 != memcmp(&last_style,&lcd_style,sizeof(lcd_style_t))) {
+      lcdDisplayOn(&dev);
+      lcdBacklightOn(&dev);
+      display_timeout_last_activity = xTaskGetTickCount();
+      if (0 != strlen(lcd_state.alert)) {
+        clear_lcd(lcd_style.alert_background_color);
+        render_message(fx24G,lcd_style.alert_foreground_color,0,20,DIR_W_TO_E,(unsigned char *)lcd_state.alert);
+        last_alert_tick = xTaskGetTickCount();
+      } else {
+        clear_lcd(lcd_style.background_color);
+        render_message(fx16G,lcd_style.foreground_color,0,20,DIR_W_TO_E,(unsigned char *)lcd_state.message);
+      }
+      memcpy(&last_rendered,&lcd_state,sizeof(lcd_state_t));
+      memcpy(&last_style,&lcd_style,sizeof(lcd_style_t));
+    }
+
+    int ms_since_last_update = (xTaskGetTickCount()-display_timeout_last_activity)*portTICK_RATE_MS;
+    int ms_since_last_alert = (xTaskGetTickCount()-last_alert_tick)*portTICK_RATE_MS;
+    ESP_LOGI(__FUNCTION__, "update[ms]:%d, alert[ms]:%d",ms_since_last_update,ms_since_last_alert);
+
+    if (ms_since_last_alert > 5000) {
+      strcpy(lcd_state.alert,"");
+    }
+    if (ms_since_last_update < 10000) {
+      lcdDisplayOn(&dev);
+      lcdBacklightOn(&dev);
+    } else {
+      lcdDisplayOff(&dev);
+      lcdBacklightOff(&dev);
+    }
   }
 }
