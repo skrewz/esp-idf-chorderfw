@@ -27,6 +27,7 @@
 #include "config.h"
 
 #include "chorder_display.h"
+#include "chorder_wifi.h"
 
 #include "driver/gpio.h"
 #include "fontx.h"
@@ -983,6 +984,8 @@ void app_main(void)
 
     spi_master_init(&dev, CONFIG_MOSI_GPIO, CONFIG_SCLK_GPIO, CONFIG_CS_GPIO, CONFIG_DC_GPIO, CONFIG_RESET_GPIO, CONFIG_BL_GPIO);
 
+    wifi_init_sta();
+
     // Chorder setup
     switch_to_opmode(OPMODE_BLE_KEYBOARD);
 
@@ -994,5 +997,5 @@ void app_main(void)
     //xTaskCreate(BLE_muckery, "BLE_muckery", 1024*6, NULL, 2, NULL);
     xTaskCreate(render_display_task, "render_display_task", 1024*3, NULL, 2, NULL);
     xTaskCreate(watch_for_key_changes, "watch_for_key_changes", 1024*3, NULL, 2, NULL);
-    xTaskCreate(https_muckery, "https_muckery", 1024*6, NULL, 2, NULL);
+    //xTaskCreate(https_muckery, "https_muckery", 1024*6, NULL, 2, NULL);
 }
