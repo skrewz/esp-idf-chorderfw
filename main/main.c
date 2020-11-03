@@ -104,9 +104,6 @@ static void hidd_event_callback(esp_hidd_cb_event_t event, esp_hidd_cb_param_t *
 #define MOUSE_SPEED 30
 #define MAX_CMDLEN  100
 
-#define EXT_UART_TAG "EXT_UART"
-#define CONSOLE_UART_TAG "CONSOLE_UART"
-
 static config_data_t config;
 
 #define CMDSTATE_IDLE 0
@@ -218,25 +215,25 @@ static void hidd_event_callback(esp_hidd_cb_event_t event, esp_hidd_cb_param_t *
         case ESP_HIDD_EVENT_DEINIT_FINISH:
                                 break;
         case ESP_HIDD_EVENT_BLE_CONNECT: {
-                                             ESP_LOGI(TAG, "ESP_HIDD_EVENT_BLE_CONNECT");
+                                             ESP_LOGI(__FUNCTION__, "ESP_HIDD_EVENT_BLE_CONNECT");
                                              hid_conn_id = param->connect.conn_id;
                                              xEventGroupClearBits(eventgroup_system,SYSTEM_CURRENTLY_ADVERTISING);
                                              break;
                                          }
         case ESP_HIDD_EVENT_BLE_DISCONNECT: {
                                                 sec_conn = false;
-                                                ESP_LOGI(TAG, "ESP_HIDD_EVENT_BLE_DISCONNECT");
+                                                ESP_LOGI(__FUNCTION__, "ESP_HIDD_EVENT_BLE_DISCONNECT");
                                                 esp_ble_gap_start_advertising(&hidd_adv_params);
                                                 xEventGroupSetBits(eventgroup_system,SYSTEM_CURRENTLY_ADVERTISING);
                                                 break;
                                             }
         case ESP_HIDD_EVENT_BLE_VENDOR_REPORT_WRITE_EVT: {
-                                                             ESP_LOGI(TAG, "%s, ESP_HIDD_EVENT_BLE_VENDOR_REPORT_WRITE_EVT", __func__);
-                                                             ESP_LOG_BUFFER_HEX(TAG, param->vendor_write.data, param->vendor_write.length);
+                                                             ESP_LOGI(__FUNCTION__, "%s, ESP_HIDD_EVENT_BLE_VENDOR_REPORT_WRITE_EVT", __func__);
+                                                             ESP_LOG_BUFFER_HEX(__FUNCTION__, param->vendor_write.data, param->vendor_write.length);
                                                              break;
                                                          }
         case ESP_HIDD_EVENT_BLE_LED_OUT_WRITE_EVT: {
-                                                       ESP_LOGI(TAG, "%s, ESP_HIDD_EVENT_BLE_LED_OUT_WRITE_EVT, keyboard LED value: %d", __func__, param->vendor_write.data[0]);
+                                                       ESP_LOGI(__FUNCTION__, "%s, ESP_HIDD_EVENT_BLE_LED_OUT_WRITE_EVT, keyboard LED value: %d", __func__, param->vendor_write.data[0]);
                                                    }
         default:
                                                    break;
@@ -253,7 +250,7 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param
             break;
         case ESP_GAP_BLE_SEC_REQ_EVT:
             for(int i = 0; i < ESP_BD_ADDR_LEN; i++) {
-                ESP_LOGD(TAG, "%x:",param->ble_security.ble_req.bd_addr[i]);
+                ESP_LOGD(__FUNCTION__, "%x:",param->ble_security.ble_req.bd_addr[i]);
             }
             esp_ble_gap_security_rsp(param->ble_security.ble_req.bd_addr, true);
             break;
@@ -261,13 +258,13 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param
             sec_conn = true;
             esp_bd_addr_t bd_addr;
             memcpy(bd_addr, param->ble_security.auth_cmpl.bd_addr, sizeof(esp_bd_addr_t));
-            ESP_LOGI(TAG, "remote BD_ADDR: %08x%04x",\
+            ESP_LOGI(__FUNCTION__, "remote BD_ADDR: %08x%04x",\
                     (bd_addr[0] << 24) + (bd_addr[1] << 16) + (bd_addr[2] << 8) + bd_addr[3],
                     (bd_addr[4] << 8) + bd_addr[5]);
-            ESP_LOGI(TAG, "address type = %d", param->ble_security.auth_cmpl.addr_type);
-            ESP_LOGI(TAG, "pair status = %s",param->ble_security.auth_cmpl.success ? "success" : "fail");
+            ESP_LOGI(__FUNCTION__, "address type = %d", param->ble_security.auth_cmpl.addr_type);
+            ESP_LOGI(__FUNCTION__, "pair status = %s",param->ble_security.auth_cmpl.success ? "success" : "fail");
             if(!param->ble_security.auth_cmpl.success) {
-                ESP_LOGE(TAG, "fail reason = 0x%x",param->ble_security.auth_cmpl.fail_reason);
+                ESP_LOGE(__FUNCTION__, "fail reason = 0x%x",param->ble_security.auth_cmpl.fail_reason);
             } else {
                 xEventGroupClearBits(eventgroup_system,SYSTEM_CURRENTLY_ADVERTISING);
             }
@@ -275,13 +272,13 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param
             //add connected device to whitelist (necessary if whitelist connections only).
             if(esp_ble_gap_update_whitelist(true,bd_addr,BLE_WL_ADDR_TYPE_PUBLIC) != ESP_OK)
             {
-                ESP_LOGW(TAG,"cannot add device to whitelist, with public address");
+                ESP_LOGW(__FUNCTION__,"cannot add device to whitelist, with public address");
             } else {
-                ESP_LOGI(TAG,"added device to whitelist");
+                ESP_LOGI(__FUNCTION__,"added device to whitelist");
             }
             if(esp_ble_gap_update_whitelist(true,bd_addr,BLE_WL_ADDR_TYPE_RANDOM) != ESP_OK)
             {
-                ESP_LOGW(TAG,"cannot add device to whitelist, with random address");
+                ESP_LOGW(__FUNCTION__,"cannot add device to whitelist, with random address");
             }
 #endif
             break;
@@ -832,7 +829,7 @@ void switch_to_opmode(enum Operating_mode target){
       lcd_style.background_color = CYAN;
       break;
     default:
-      ESP_LOGE(TAG,"Wrong switch_to_mode chosen.");
+      ESP_LOGE(__FUNCTION__,"Wrong switch_to_mode chosen.");
   }
 }
 
@@ -885,7 +882,7 @@ void watch_for_key_changes (void *pvParameters)
         if (previousStableReading != currentStableReading) {
             //Serial.print(F("currentStableReading now "));
             //Serial.println(currentStableReading);
-            ESP_LOGI(TAG, "New reading: %s%s%s %s%s%s%s",
+            ESP_LOGD(__FUNCTION__, "New reading: %s%s%s %s%s%s%s",
                 currentStableReading & (1 << 6) ? "F" : "_",
                 currentStableReading & (1 << 5) ? "C" : "_",
                 currentStableReading & (1 << 4) ? "N" : "_",
@@ -900,11 +897,11 @@ void watch_for_key_changes (void *pvParameters)
                 bool are_thumbs_down = 0x70 == currentStableReading;
                 if (are_thumbs_down)
                 {
-                    ESP_LOGI(TAG, "Performing a BT factory reset: ");
+                    ESP_LOGI(__FUNCTION__, "Performing a BT factory reset: ");
                     if ( ! ble.factoryReset() ){
-                        ESP_LOGW(TAG, "Factory reset failed!");
+                        ESP_LOGW(__FUNCTION__, "Factory reset failed!");
                     }
-                    ESP_LOGI(TAG, "Resetting Arduino...");
+                    ESP_LOGI(__FUNCTION__, "Resetting Arduino...");
                     resetFunc();
                 }
             */
@@ -940,15 +937,15 @@ void app_main(void)
     initialize_lcd();
     // Initialize FreeRTOS elements
     eventgroup_system = xEventGroupCreate();
-    if(eventgroup_system == NULL) ESP_LOGE(TAG, "Cannot initialize event group");
+    if(eventgroup_system == NULL) ESP_LOGE(__FUNCTION__, "Cannot initialize event group");
     //if set in KConfig, pairing is disable by default.
     //User has to enable pairing with $PM1
 #if CONFIG_MODULE_BT_PAIRING
-    ESP_LOGI(TAG,"pairing disabled by default");
+    ESP_LOGI(__FUNCTION__,"pairing disabled by default");
     xEventGroupClearBits(eventgroup_system,SYSTEM_PAIRING_ENABLED);
     hidd_adv_params.adv_filter_policy = ADV_FILTER_ALLOW_SCAN_ANY_CON_WLST;
 #else
-    ESP_LOGI(TAG,"pairing enabled by default");
+    ESP_LOGI(__FUNCTION__,"pairing enabled by default");
     xEventGroupSetBits(eventgroup_system,SYSTEM_PAIRING_ENABLED);
     hidd_adv_params.adv_filter_policy = ADV_FILTER_ALLOW_SCAN_ANY_CON_ANY;
 #endif
@@ -966,30 +963,30 @@ void app_main(void)
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
     ret = esp_bt_controller_init(&bt_cfg);
     if (ret) {
-        ESP_LOGE(TAG, "%s initialize controller failed\n", __func__);
+        ESP_LOGE(__FUNCTION__, "%s initialize controller failed\n", __func__);
         return;
     }
 
     ret = esp_bt_controller_enable(ESP_BT_MODE_BLE);
     if (ret) {
-        ESP_LOGE(TAG, "%s enable controller failed\n", __func__);
+        ESP_LOGE(__FUNCTION__, "%s enable controller failed\n", __func__);
         return;
     }
 
     ret = esp_bluedroid_init();
     if (ret) {
-        ESP_LOGE(TAG, "%s init bluedroid failed\n", __func__);
+        ESP_LOGE(__FUNCTION__, "%s init bluedroid failed\n", __func__);
         return;
     }
 
     ret = esp_bluedroid_enable();
     if (ret) {
-        ESP_LOGE(TAG, "%s init bluedroid failed\n", __func__);
+        ESP_LOGE(__FUNCTION__, "%s init bluedroid failed\n", __func__);
         return;
     }
 
     if((ret = esp_hidd_profile_init()) != ESP_OK) {
-        ESP_LOGE(TAG, "%s init bluedroid failed\n", __func__);
+        ESP_LOGE(__FUNCTION__, "%s init bluedroid failed\n", __func__);
     }
 
     // Read config

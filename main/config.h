@@ -1,4 +1,3 @@
-
 #ifndef _CONFIG_H_
 #define _CONFIG_H_
 
@@ -54,4 +53,12 @@ typedef struct config_data {
 #define GND_PIN3 GPIO_NUM_2
 #define GND_PIN4 GPIO_NUM_15
 
+// config_private.h must define:
+// - CHORDER_POST_TARGET (the URL to POST to)
+// - CHORDER_POST_PARMNAME (the x-www-form-urlencoded POST parameter name to put the POST into)
+// - CHORDER_POST_SERVER_CERT (in PEM; can be intermediate)
+// - CHORDER_POST_CLIENT_CERT (in PEM)
+// - CHORDER_POST_CLIENT_KEY (in PEM)
+
+#include "config_private.h"
 #endif
