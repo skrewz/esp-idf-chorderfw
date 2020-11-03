@@ -297,6 +297,109 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param
 ////////////////////////////////////////////////////////////////////////////////
 // {{{
 
+bool urlencode_into(char *dest, size_t max_dest, const char *unescaped)
+{
+  char *outpos = dest;
+  for(int i=0;i<strlen(unescaped);i++)
+  {
+    char addition[4];
+    if (
+        ('A' <= unescaped[i] && unescaped[i] <= 'Z') ||
+        ('a' <= unescaped[i] && unescaped[i] <= 'z') ||
+        ('0' <= unescaped[i] && unescaped[i] <= '9') ||
+        '-' == unescaped[i] ||
+        '_' == unescaped[i] ||
+        '.' == unescaped[i] ||
+        '~' == unescaped[i])
+    {
+      sprintf(addition,"%c",unescaped[i]);
+    } else {
+      sprintf(addition,"%%%02x",unescaped[i]);
+    }
+    int written = snprintf(outpos,max_dest-(outpos-dest),"%s",addition);
+    if (written != strlen(addition))
+      return false;
+    outpos += written;
+  }
+  return true;
+}
+
+
+bool send_off_note(char *note)
+{
+  // Starting point:
+  // https://github.com/espressif/esp-idf/blob/357a2776032299b8bc4044900a8f1d6950d7ce89/examples/protocols/esp_http_client/main/esp_http_client_example.c
+  if (! wifi_is_connected())
+    return false;
+
+  char encoded[2*INTERNAL_BUFSIZE];
+
+  esp_err_t _http_event_handle(esp_http_client_event_t *evt)
+  {
+    switch(evt->event_id) {
+      case HTTP_EVENT_ERROR:
+        ESP_LOGI(__FUNCTION__, "HTTP_EVENT_ERROR");
+        break;
+      case HTTP_EVENT_ON_CONNECTED:
+        ESP_LOGI(__FUNCTION__, "HTTP_EVENT_ON_CONNECTED");
+        break;
+      case HTTP_EVENT_HEADERS_SENT:
+        ESP_LOGI(__FUNCTION__, "HTTP_EVENT_HEADERS_SENT");
+        break;
+      case HTTP_EVENT_ON_HEADER:
+        ESP_LOGI(__FUNCTION__, "HTTP_EVENT_ON_HEADER");
+        ESP_LOGD(__FUNCTION__, "%.*s", evt->data_len, (char*)evt->data);
+        break;
+      case HTTP_EVENT_ON_DATA:
+        ESP_LOGI(__FUNCTION__, "HTTP_EVENT_ON_DATA, len=%d", evt->data_len);
+        ESP_LOGD(__FUNCTION__, "%.*s", evt->data_len, (char*)evt->data);
+
+        break;
+      case HTTP_EVENT_ON_FINISH:
+        ESP_LOGI(__FUNCTION__, "HTTP_EVENT_ON_FINISH");
+        break;
+      case HTTP_EVENT_DISCONNECTED:
+        ESP_LOGI(__FUNCTION__, "HTTP_EVENT_DISCONNECTED");
+        break;
+    }
+    return ESP_OK;
+  }
+  esp_http_client_config_t config = {
+    .url = CHORDER_POST_TARGET,
+    //.use_global_ca_store = true,
+    .cert_pem = CHORDER_POST_SERVER_CERT,
+    .client_cert_pem = CHORDER_POST_CLIENT_CERT,
+    .client_key_pem = CHORDER_POST_CLIENT_KEY,
+    .event_handler = _http_event_handle,
+  };
+  esp_http_client_handle_t client = esp_http_client_init(&config);
+
+  esp_http_client_set_method(client, HTTP_METHOD_POST);
+  strcpy(encoded,CHORDER_POST_PARMNAME "=");
+  urlencode_into(encoded+strlen(CHORDER_POST_PARMNAME "="),sizeof(encoded)-strlen(CHORDER_POST_PARMNAME "="),note);
+  ESP_LOGI(__FUNCTION__,"CHORDER_POST_PARMNAME: %s",CHORDER_POST_PARMNAME);
+  ESP_LOGI(__FUNCTION__,"note: %s",note);
+  ESP_LOGI(__FUNCTION__,"encoded: %s",encoded);
+  esp_http_client_set_post_field(client, encoded, strlen(encoded));
+  esp_err_t err = esp_http_client_perform(client);
+  /* int flags = mbedtls_ssl_get_verify_result(&tls->ssl); */
+  /* char buf[100] = { 0, }; */
+  /* mbedtls_x509_crt_verify_info(buf, sizeof(buf), " ! ",  flags); */
+  /* printf("Certificate Verification Failure Reason: %s\n", buf); */
+
+  if (err == ESP_OK) {
+    ESP_LOGI(__FUNCTION__, "Status = %d, content_length = %d",
+        esp_http_client_get_status_code(client),
+        esp_http_client_get_content_length(client));
+  }
+  if (err == ESP_OK && 200 == esp_http_client_get_status_code(client)) {
+    esp_http_client_cleanup(client);
+    return true;
+  } else {
+    esp_http_client_cleanup(client);
+    return false;
+  }
+}
 void switch_to_opmode(enum Operating_mode target);
 
 void set_up_input_pin (int pinnum)
@@ -410,10 +513,16 @@ void printing_handler(symbol_t symbol){
     initialised = true;
   }
   
-
   switch (symbol) {
     case NONBLE_BACKSPACE:
       lcd_state.message[0 == strlen(lcd_state.message) ? 0 : strlen(lcd_state.message)-1] = '\0';
+      break;
+    case '\n': // sending on enter key presses:
+      if (send_off_note(lcd_state.message)) {
+        strcpy(lcd_state.message,"");
+      } else {
+        strcpy(lcd_state.alert,"Couldn't send note!");
+      }
       break;
     default:
       if (symbol < 128) {
@@ -822,63 +931,6 @@ void watch_for_key_changes (void *pvParameters)
     }
 }
 
-void https_muckery(void *pvParameters)
-{
-  while(1) {
-    vTaskDelay(10000 / portTICK_RATE_MS);
-    if (! wifi_is_connected())
-      continue;
-
-    esp_err_t _http_event_handle(esp_http_client_event_t *evt)
-    {
-      switch(evt->event_id) {
-        case HTTP_EVENT_ERROR:
-          ESP_LOGI(TAG, "HTTP_EVENT_ERROR");
-          break;
-        case HTTP_EVENT_ON_CONNECTED:
-          ESP_LOGI(TAG, "HTTP_EVENT_ON_CONNECTED");
-          break;
-        case HTTP_EVENT_HEADER_SENT:
-          ESP_LOGI(TAG, "HTTP_EVENT_HEADER_SENT");
-          break;
-        case HTTP_EVENT_ON_HEADER:
-          ESP_LOGI(TAG, "HTTP_EVENT_ON_HEADER");
-          printf("%.*s", evt->data_len, (char*)evt->data);
-          break;
-        case HTTP_EVENT_ON_DATA:
-          ESP_LOGI(TAG, "HTTP_EVENT_ON_DATA, len=%d", evt->data_len);
-          if (!esp_http_client_is_chunked_response(evt->client)) {
-            printf("%.*s", evt->data_len, (char*)evt->data);
-          }
-
-          break;
-        case HTTP_EVENT_ON_FINISH:
-          ESP_LOGI(TAG, "HTTP_EVENT_ON_FINISH");
-          break;
-        case HTTP_EVENT_DISCONNECTED:
-          ESP_LOGI(TAG, "HTTP_EVENT_DISCONNECTED");
-          break;
-      }
-      return ESP_OK;
-    }
-
-    esp_http_client_config_t config = {
-      .url = "https://httpbin.org/get",
-      .event_handler = _http_event_handle,
-    };
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    esp_err_t err = esp_http_client_perform(client);
-
-    if (err == ESP_OK) {
-      ESP_LOGI(TAG, "Status = %d, content_length = %d",
-          esp_http_client_get_status_code(client),
-          esp_http_client_get_content_length(client));
-    }
-    esp_http_client_cleanup(client);
-
-  }
-}
-
 // }}}
 
 
@@ -999,6 +1051,5 @@ void app_main(void)
     //xTaskCreate(ST7789, "ST7789", 1024*6, NULL, 2, NULL);
     //xTaskCreate(BLE_muckery, "BLE_muckery", 1024*6, NULL, 2, NULL);
     xTaskCreate(render_display_task, "render_display_task", 1024*3, NULL, 2, NULL);
-    xTaskCreate(watch_for_key_changes, "watch_for_key_changes", 1024*3, NULL, 2, NULL);
-    xTaskCreate(https_muckery, "https_muckery", 1024*6, NULL, 2, NULL);
+    xTaskCreate(watch_for_key_changes, "watch_for_key_changes", 1024*6, NULL, 2, NULL);
 }
