@@ -38,6 +38,10 @@ typedef struct config_data {
 // GPIO 34-39 do not support pull-up/pull-down and are input-only
 // input only        GPIO_NUM_36 
 #define F_THUMB_PIN  GPIO_NUM_13
+// Note that this must be an RTC GPIO (0,2,4,12-15,25-27,32-39) to allow ext0
+// wakeup: Also note that you'll want to attach the GND connection of this
+// switch to a "real" GND PIN, and not the GND_PIN*'s below. Those cease to
+// deliver GND upon deep sleep.
 #define C_THUMB_PIN  GPIO_NUM_12
 // input only        GPIO_NUM_39 
 #define N_THUMB_PIN  GPIO_NUM_32

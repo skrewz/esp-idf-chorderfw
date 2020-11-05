@@ -37,6 +37,7 @@ enum nonkeys {
   MODE_NOTETAKING,      // Switch to non-BLE note taking
   MODE_BLE_KEYBOARD,    // Switch to BLE keyboard mode
   MODE_BLE_MOUSE,       // Switch to BLE mouse mode
+  MODE_DEEPSLEEP,       // Go into deep sleep (power down the chorder)
 
 /* Further keys for non-BLE behaviour */
   DIV_NonBLE,
@@ -622,13 +623,13 @@ symbol_t keymap[128][7] = { // {{{
   MOD_RALT                 , // non-BLE numsymed  for -CN -MRP  0x37 
 },
 {
-  HID_KEY_RESERVED         , // MODE==ALPHA       for -CN I---  0x38 
-  HID_KEY_RESERVED         , // MODE==NUMSYM      for -CN I---  0x38 
-  HID_KEY_RESERVED         , // MODE==FUNCTION    for -CN I---  0x38 
-  HID_KEY_RESERVED         , // MODE==MOUSE       for -CN I---  0x38
-  NONBLE_NOKEY             , // non-BLE shifted   for -CN I---  0x38 
-  NONBLE_NOKEY             , // non-BLE unshifted for -CN I---  0x38 
-  NONBLE_NOKEY             , // non-BLE numsymed  for -CN I---  0x38 
+  MODE_DEEPSLEEP           , // MODE==ALPHA       for -CN I---  0x38
+  MODE_DEEPSLEEP           , // MODE==NUMSYM      for -CN I---  0x38
+  MODE_DEEPSLEEP           , // MODE==FUNCTION    for -CN I---  0x38
+  MODE_DEEPSLEEP           , // MODE==MOUSE       for -CN I---  0x38
+  MODE_DEEPSLEEP           , // non-BLE shifted   for -CN I---  0x38
+  MODE_DEEPSLEEP           , // non-BLE unshifted for -CN I---  0x38
+  MODE_DEEPSLEEP           , // non-BLE numsymed  for -CN I---  0x38
 },
 {
   ANDROID_back             , // MODE==ALPHA       for -CN I--P  0x39 

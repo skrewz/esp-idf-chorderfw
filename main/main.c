@@ -21,6 +21,7 @@
 #include "esp_bt_device.h"
 #include "esp_int_wdt.h"
 #include "esp_tls.h"
+#include "esp_sleep.h"
 #include "esp_http_client.h"
 
 #include "hid_dev.h"
@@ -30,6 +31,7 @@
 #include "chorder_wifi.h"
 
 #include "driver/gpio.h"
+#include "driver/rtc_io.h"
 #include "fontx.h"
 #include "bmpfile.h"
 #include "decode_image.h"
@@ -294,6 +296,33 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param
 ////////////////////////////////////////////////////////////////////////////////
 // {{{
 
+void send_chorder_to_sleep (void)
+{
+  gpio_reset_pin(C_THUMB_PIN);
+  if (ESP_OK != rtc_gpio_init(C_THUMB_PIN))
+  {
+    ESP_LOGE(__FUNCTION__,"Failure initialising pin %d's = (%d) as RTC", C_THUMB_PIN, rtc_io_number_get(C_THUMB_PIN));
+  }
+  // Handle sleep mode stuff:
+  if (ESP_OK != rtc_gpio_wakeup_enable(C_THUMB_PIN, GPIO_INTR_LOW_LEVEL))
+  {
+    ESP_LOGE(__FUNCTION__,"Failure setting pin %d's = (%d) RTC wakeup", C_THUMB_PIN, rtc_io_number_get(C_THUMB_PIN));
+  }
+  if (ESP_OK != rtc_gpio_pullup_en(C_THUMB_PIN))
+  {
+    ESP_LOGE(__FUNCTION__,"Failure setting pin %d's to pull-up", C_THUMB_PIN);
+  }
+
+  if (ESP_OK != rtc_gpio_pullup_en(rtc_io_number_get(C_THUMB_PIN))) {
+    ESP_LOGE(__FUNCTION__,"Failure enabling RTC pullup");
+  }
+  if (ESP_OK != esp_sleep_enable_ext0_wakeup(C_THUMB_PIN, 0))
+  {
+    ESP_LOGE(__FUNCTION__,"Failure setting pin %d's esp_sleep_enable_ext0_wakeup", C_THUMB_PIN);
+  }
+  esp_deep_sleep_start();
+}
+
 bool urlencode_into(char *dest, size_t max_dest, const char *unescaped)
 {
   char *outpos = dest;
@@ -405,23 +434,30 @@ void set_up_input_pin (int pinnum)
     if (ESP_OK != gpio_set_direction(pinnum, GPIO_MODE_INPUT))
     {
         ESP_LOGE(__FUNCTION__,"Failure setting pin %d's direction", pinnum);
+        return;
     }
-    if (ESP_OK != gpio_set_pull_mode(pinnum, GPIO_PULLUP_ONLY))
+    if (ESP_OK != gpio_pullup_en(pinnum))
     {
         ESP_LOGE(__FUNCTION__,"Failure setting pin %d's to pull-up", pinnum);
+        return;
     }
+    ESP_LOGI(__FUNCTION__,"Successfully set up GPIO pin %d", pinnum);
 }
+ 
 void set_up_gnd_pin (int pinnum)
 {
     gpio_reset_pin(pinnum);
     if (ESP_OK != gpio_set_direction(pinnum, GPIO_MODE_OUTPUT))
     {
         ESP_LOGE(__FUNCTION__,"Failure setting pin %d's direction", pinnum);
+        return;
     }
     if (ESP_OK != gpio_set_level(pinnum, 0))
     {
         ESP_LOGE(__FUNCTION__,"Failure pin %d to level 0", pinnum);
+        return;
     }
+    ESP_LOGI(__FUNCTION__,"Successfully set up software GND pin %d", pinnum);
 }
 uint8_t get_current_state ()
 {
@@ -458,6 +494,28 @@ void sendControlKey(char *cntrlName){
   //ble.println(cntrlName);  
 }  
 
+bool opmode_switch_and_deepsleep_handler (uint8_t keyState)
+{
+  symbol_t symbol = keymap[keyState][0];
+  switch (symbol) {
+    case MODE_BLE_KEYBOARD:
+      switch_to_opmode(OPMODE_BLE_KEYBOARD);
+      return true;
+    case MODE_BLE_MOUSE:
+      switch_to_opmode(OPMODE_BLE_MOUSE);
+      return true;
+    case MODE_NOTETAKING:
+      switch_to_opmode(OPMODE_NOTETAKING);
+      return true;
+    case MODE_DEEPSLEEP:
+      ESP_LOGI(__FUNCTION__,"Entering deep sleep now...");
+      vTaskDelay(1000 / portTICK_RATE_MS);
+      send_chorder_to_sleep();
+      return true; // oughtn't actually matter; however, warnings
+    default:
+      return false;
+  }
+}
 
 /* Redirector, so that the core logic (shifted not shifted) can be managed
  * centrally:
@@ -482,16 +540,6 @@ void handle_keystate_update_internally(uint8_t keyState, void (*symbol_handler)(
     case MODE_NUM:
       is_shifted = false;
       is_numsymed = true;
-      return;
-    case MODE_BLE_KEYBOARD:
-      is_shifted = false;
-      is_numsymed = false;
-      switch_to_opmode(OPMODE_BLE_KEYBOARD);
-      return;
-    case MODE_BLE_MOUSE:
-      is_shifted = false;
-      is_numsymed = false;
-      switch_to_opmode(OPMODE_BLE_MOUSE);
       return;
     default:
       (*symbol_handler)(symbol);
@@ -563,20 +611,6 @@ void handle_keystate_update_as_ble_keyboard(uint8_t keyState){
       mode = NUMSYM;
     }
     return;
-  case MODE_NOTETAKING:
-    mode = ALPHA;
-    modKeys = 0x00;
-    isCapsLocked = false;
-    isNumsymLocked = false;
-    switch_to_opmode(OPMODE_NOTETAKING);
-    break;
-  case MODE_BLE_MOUSE:
-    mode = ALPHA;
-    modKeys = 0x00;
-    isCapsLocked = false;
-    isNumsymLocked = false;
-    switch_to_opmode(OPMODE_BLE_MOUSE);
-    break;
   case MODE_FUNC:
     if (mode == FUNCTION) {
       mode = ALPHA;
@@ -822,6 +856,10 @@ void switch_to_opmode(enum Operating_mode target){
       break;
     case OPMODE_BLE_KEYBOARD:
       keystate_handler = &handle_keystate_update_as_ble_keyboard;
+      mode = ALPHA;
+      modKeys = 0x00;
+      isCapsLocked = false;
+      isNumsymLocked = false;
       lcd_style.background_color = BLUE;
       break;
     case OPMODE_BLE_MOUSE:
@@ -911,7 +949,11 @@ void watch_for_key_changes (void *pvParameters)
               case PRESSING:
                 if (previousStableReading & ~currentStableReading) {
                   state = RELEASING;
-                  (*keystate_handler)(previousStableReading);
+                  // First, let the opmode_switch_handler react. If it does nothing, proceed:
+                  if (! opmode_switch_and_deepsleep_handler(previousStableReading))
+                  {
+                    (*keystate_handler)(previousStableReading);
+                  }
                 } 
                 break;
 
