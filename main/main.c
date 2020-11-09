@@ -298,6 +298,31 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param
 
 void send_chorder_to_sleep (void)
 {
+  ESP_LOGI(__FUNCTION__,"Entering deep sleep now...");
+  if (ESP_OK != esp_hidd_profile_deinit())
+  {
+    ESP_LOGE(__FUNCTION__,"Failure: esp_hidd_profile_deinit()");
+  }
+  if (ESP_OK != esp_bluedroid_disable())
+  {
+    ESP_LOGE(__FUNCTION__,"Failure: esp_bluedroid_disable()");
+  }
+  if (ESP_OK != esp_bluedroid_deinit())
+  {
+    ESP_LOGE(__FUNCTION__,"Failure: esp_bluedroid_deinit()");
+  }
+  if (ESP_OK != esp_bt_controller_disable())
+  {
+    ESP_LOGE(__FUNCTION__,"Failure: esp_bt_controller_disable()");
+  }
+  if (ESP_OK != esp_wifi_disconnect())
+  {
+    ESP_LOGE(__FUNCTION__,"Failure: esp_wifi_disconnect()");
+  }
+  if (ESP_OK != esp_wifi_stop())
+  {
+    ESP_LOGE(__FUNCTION__,"Failure: esp_wifi_stop()");
+  }
   gpio_reset_pin(C_THUMB_PIN);
   if (ESP_OK != rtc_gpio_init(C_THUMB_PIN))
   {
@@ -472,6 +497,12 @@ uint8_t get_current_state ()
     return state;
 }
 
+void release_keys(){
+  uint8_t buf[8];
+  memset(buf,0x00,8);
+  esp_hidd_send_keyboard_value(hid_conn_id,0x00,buf,1);
+}
+
 void sendRawKey(uint8_t modKey, uint8_t rawKey){
   uint8_t buf[8];
   memset(buf,0x00,8);
@@ -481,8 +512,7 @@ void sendRawKey(uint8_t modKey, uint8_t rawKey){
       hid_conn_id,modKey,
       buf[0],buf[1],buf[2],buf[3],
       buf[4],buf[5],buf[6],buf[7]);
-  buf[0] = 0x00;
-  esp_hidd_send_keyboard_value(hid_conn_id,modKey,buf,1);
+  release_keys();
 }
 
 void sendControlKey(char *cntrlName){
@@ -508,7 +538,7 @@ bool opmode_switch_and_deepsleep_handler (uint8_t keyState)
       switch_to_opmode(OPMODE_NOTETAKING);
       return true;
     case MODE_DEEPSLEEP:
-      ESP_LOGI(__FUNCTION__,"Entering deep sleep now...");
+      strcpy(lcd_state.alert,"Entering deep sleep now...");
       vTaskDelay(1000 / portTICK_RATE_MS);
       send_chorder_to_sleep();
       return true; // oughtn't actually matter; however, warnings
@@ -526,7 +556,7 @@ void handle_keystate_update_internally(uint8_t keyState, void (*symbol_handler)(
   static bool is_numsymed = false;
 
   display_timeout_last_activity = xTaskGetTickCount();
-  symbol_t symbol = keymap[keyState][is_numsymed ? 6 : (is_shifted? 4 : 4)];
+  symbol_t symbol = keymap[keyState][is_numsymed ? 6 : (is_shifted? 4 : 5)];
 
   switch (symbol) {
     case MOD_LSHIFT:
@@ -849,6 +879,15 @@ void handle_keystate_update_as_ble_mouse(uint8_t keyState){
 }
 
 void switch_to_opmode(enum Operating_mode target){
+  static int last_opmode = -1;
+  switch(last_opmode) {
+    case OPMODE_BLE_KEYBOARD:
+      ESP_LOGI(__FUNCTION__, "Coming out of BLE Keyboard mode; releasing keys");
+      release_keys();
+      break;
+    default:
+      break;
+  }
   switch(target) {
     case OPMODE_NOTETAKING:
       keystate_handler = &handle_keystate_update_internally_with_printing;
@@ -869,6 +908,7 @@ void switch_to_opmode(enum Operating_mode target){
     default:
       ESP_LOGE(__FUNCTION__,"Wrong switch_to_mode chosen.");
   }
+  last_opmode = target;
 }
 
 // }}}
@@ -877,6 +917,23 @@ void switch_to_opmode(enum Operating_mode target){
 // Main FreeRTOS tasks
 ////////////////////////////////////////////////////////////////////////////////
 // {{{
+
+void sleep_mode_task (void *pvParameters)
+{
+  if (0 == display_timeout_last_activity)
+    display_timeout_last_activity = xTaskGetTickCount();
+
+  while (1) {
+    vTaskDelay(1000 / portTICK_RATE_MS);
+
+    int ms_since_last_update = (xTaskGetTickCount()-display_timeout_last_activity)*portTICK_RATE_MS;
+
+    if (ms_since_last_update > MS_BEFORE_SLEEP) {
+      send_chorder_to_sleep();
+    }
+  }
+}
+
 void watch_for_key_changes (void *pvParameters)
 {
     uint8_t lastKeyState = 0;
@@ -1091,4 +1148,5 @@ void app_main(void)
     //xTaskCreate(BLE_muckery, "BLE_muckery", 1024*6, NULL, 2, NULL);
     xTaskCreate(render_display_task, "render_display_task", 1024*3, NULL, 2, NULL);
     xTaskCreate(watch_for_key_changes, "watch_for_key_changes", 1024*6, NULL, 2, NULL);
+    xTaskCreate(sleep_mode_task, "sleep_mode_task", 1024*1, NULL, 2, NULL);
 }

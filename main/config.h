@@ -35,6 +35,8 @@ typedef struct config_data {
 
 #define TAG "ST7789"
 
+#define MS_BEFORE_SLEEP 180000
+
 // GPIO 34-39 do not support pull-up/pull-down and are input-only
 // input only        GPIO_NUM_36 
 #define F_THUMB_PIN  GPIO_NUM_13
