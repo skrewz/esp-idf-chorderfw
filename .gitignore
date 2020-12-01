@@ -1,1 +1,4 @@
 main/config_private.h
+build/
+sdkconfig
+sdkconfig.old
