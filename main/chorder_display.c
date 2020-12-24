@@ -21,7 +21,7 @@ FontxFile fx16G[2],
 TFT_t dev;
 
 lcd_style_t lcd_style = { 
-  .background_color = BLACK,
+  .background_color = WHITE,
   .foreground_color = BLUE,
   .alert_foreground_color = WHITE,
   .alert_background_color = RED,
@@ -128,8 +128,6 @@ void render_display_task (void *pvParameters)
   if (0 == last_alert_tick)
     last_alert_tick = xTaskGetTickCount();
 
-  lcdInit(&dev, CONFIG_WIDTH, CONFIG_HEIGHT, CONFIG_OFFSETX, CONFIG_OFFSETY);
-  clear_lcd(lcd_style.background_color);
 
   InitFontx(fx16G,"/spiffs/ILGH16XB.FNT",""); // 8x16Dot Gothic
   InitFontx(fx24G,"/spiffs/ILGH24XB.FNT",""); // 12x24Dot Gothic

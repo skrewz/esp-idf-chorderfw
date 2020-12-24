@@ -826,6 +826,15 @@ void handle_keystate_update_as_ble_mouse(uint8_t keyState){
 
   display_timeout_last_activity = xTaskGetTickCount();
   theKey = keymap[keyState][3];
+  static keymap_t lastKey = 0;
+  
+  if (lastKey == theKey) {
+    jump = 127 > 2 * jump ? 2 * jump : 127;
+  } else {
+    jump = 1;
+  }
+
+  lastKey = theKey;
 
   switch (theKey)  {
     case MODE_NOTETAKING:
@@ -853,14 +862,6 @@ void handle_keystate_update_as_ble_mouse(uint8_t keyState){
         esp_hidd_send_mouse_value(hid_conn_id,1,0,0,0);
         esp_hidd_send_mouse_value(hid_conn_id,0,0,0,0);
       }
-      break;
-    case BLEMOUSE_FURTHER:
-      jump = 127 > 2 * jump ? 2 * jump : 127;
-      sprintf(lcd_state.alert,"Jump: %d",jump);
-      break;
-    case BLEMOUSE_SHORTER:
-      jump = 0 < jump / 2 ? jump / 2 : 1;
-      sprintf(lcd_state.alert,"Jump: %d",jump);
       break;
     default:
       strcpy(lcd_state.alert,"Unknown\nkey");
@@ -1032,6 +1033,10 @@ void watch_for_key_changes (void *pvParameters)
 
 void app_main(void)
 {
+    spi_master_init(&dev, CONFIG_MOSI_GPIO, CONFIG_SCLK_GPIO, CONFIG_CS_GPIO, CONFIG_DC_GPIO, CONFIG_RESET_GPIO, CONFIG_BL_GPIO);
+    lcdInit(&dev, CONFIG_WIDTH, CONFIG_HEIGHT, CONFIG_OFFSETX, CONFIG_OFFSETY);
+    clear_lcd(lcd_style.background_color);
+
     esp_err_t ret;
     initialize_lcd();
     // Initialize FreeRTOS elements
@@ -1133,7 +1138,6 @@ void app_main(void)
     esp_ble_gap_set_security_param(ESP_BLE_SM_SET_INIT_KEY, &init_key, sizeof(uint8_t));
     esp_ble_gap_set_security_param(ESP_BLE_SM_SET_RSP_KEY, &rsp_key, sizeof(uint8_t));
 
-    spi_master_init(&dev, CONFIG_MOSI_GPIO, CONFIG_SCLK_GPIO, CONFIG_CS_GPIO, CONFIG_DC_GPIO, CONFIG_RESET_GPIO, CONFIG_BL_GPIO);
 
     wifi_init_sta();
 
@@ -1148,5 +1152,5 @@ void app_main(void)
     //xTaskCreate(BLE_muckery, "BLE_muckery", 1024*6, NULL, 2, NULL);
     xTaskCreate(render_display_task, "render_display_task", 1024*3, NULL, 2, NULL);
     xTaskCreate(watch_for_key_changes, "watch_for_key_changes", 1024*6, NULL, 2, NULL);
-    xTaskCreate(sleep_mode_task, "sleep_mode_task", 1024*1, NULL, 2, NULL);
+    xTaskCreate(sleep_mode_task, "sleep_mode_task", 1024*2, NULL, 2, NULL);
 }
