@@ -1142,7 +1142,7 @@ void app_main(void)
     wifi_init_sta();
 
     // Chorder setup
-    switch_to_opmode(OPMODE_BLE_KEYBOARD);
+    switch_to_opmode(OPMODE_NOTETAKING);
 
     // Initialise LCD, set fonts etc
 
