@@ -19,6 +19,9 @@
 #define CONFIG_BL_GPIO -1
 #endif
 
+// Additional colours:
+#define DARK_RED 0x0800
+
 void SPIFFS_Directory(char * path);
 void initialize_lcd();
 void clear_lcd(uint16_t color);

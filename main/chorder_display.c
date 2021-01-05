@@ -21,8 +21,8 @@ FontxFile fx16G[2],
 TFT_t dev;
 
 lcd_style_t lcd_style = { 
-  .background_color = WHITE,
-  .foreground_color = BLUE,
+  .background_color = BLACK,
+  .foreground_color = RED,
   .alert_foreground_color = WHITE,
   .alert_background_color = RED,
 };

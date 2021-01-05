@@ -892,7 +892,7 @@ void switch_to_opmode(enum Operating_mode target){
   switch(target) {
     case OPMODE_NOTETAKING:
       keystate_handler = &handle_keystate_update_internally_with_printing;
-      lcd_style.background_color = BLACK;
+      lcd_style.background_color = DARK_RED;
       break;
     case OPMODE_BLE_KEYBOARD:
       keystate_handler = &handle_keystate_update_as_ble_keyboard;
@@ -1054,6 +1054,15 @@ void app_main(void)
     hidd_adv_params.adv_filter_policy = ADV_FILTER_ALLOW_SCAN_ANY_CON_ANY;
 #endif
 
+    // Start rendering tasks before wifi, to allow early key pressing etc:
+
+    // Chorder setup
+    switch_to_opmode(OPMODE_NOTETAKING);
+
+    xTaskCreate(render_display_task, "render_display_task", 1024*3, NULL, 2, NULL);
+    xTaskCreate(watch_for_key_changes, "watch_for_key_changes", 1024*6, NULL, 2, NULL);
+
+
     // Initialize NVS.
     ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -1141,16 +1150,7 @@ void app_main(void)
 
     wifi_init_sta();
 
-    // Chorder setup
-    switch_to_opmode(OPMODE_NOTETAKING);
-
-    // Initialise LCD, set fonts etc
-
-
-
     //xTaskCreate(ST7789, "ST7789", 1024*6, NULL, 2, NULL);
     //xTaskCreate(BLE_muckery, "BLE_muckery", 1024*6, NULL, 2, NULL);
-    xTaskCreate(render_display_task, "render_display_task", 1024*3, NULL, 2, NULL);
-    xTaskCreate(watch_for_key_changes, "watch_for_key_changes", 1024*6, NULL, 2, NULL);
     xTaskCreate(sleep_mode_task, "sleep_mode_task", 1024*2, NULL, 2, NULL);
 }
