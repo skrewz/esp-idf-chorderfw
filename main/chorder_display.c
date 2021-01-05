@@ -30,6 +30,7 @@ lcd_style_t lcd_style = {
 lcd_state_t lcd_state = { 
   .message = "",
   .alert = "",
+  .wifi_connected = false,
 };
 
 TickType_t display_timeout_last_activity = 0;
@@ -156,6 +157,9 @@ void render_display_task (void *pvParameters)
         clear_lcd(lcd_style.background_color);
         render_message(fx16G,lcd_style.foreground_color,0,20,DIR_W_TO_E,(unsigned char *)lcd_state.message);
       }
+
+      lcdDrawCircle(&dev, CONFIG_WIDTH-3-2, CONFIG_HEIGHT-3-2, 3, lcd_state.wifi_connected ? WHITE : RED);
+
       memcpy(&last_rendered,&lcd_state,sizeof(lcd_state_t));
       memcpy(&last_style,&lcd_style,sizeof(lcd_style_t));
     }
