@@ -31,6 +31,7 @@ lcd_state_t lcd_state = {
   .message = "",
   .alert = "",
   .wifi_connected = false,
+  .bluetooth_connected = false,
 };
 
 TickType_t display_timeout_last_activity = 0;
@@ -158,7 +159,22 @@ void render_display_task (void *pvParameters)
         render_message(fx16G,lcd_style.foreground_color,0,20,DIR_W_TO_E,(unsigned char *)lcd_state.message);
       }
 
-      lcdDrawCircle(&dev, CONFIG_WIDTH-3-2, CONFIG_HEIGHT-3-2, 3, lcd_state.wifi_connected ? WHITE : RED);
+      // 2 is margin from screen edge:
+      lcdDrawFillCircle(&dev, CONFIG_WIDTH-2-3, CONFIG_HEIGHT-2-3, 3, lcd_state.wifi_connected ? WHITE : RED);
+      lcdDrawFillRect(&dev,
+          CONFIG_WIDTH-(
+            2+      // margin against edge of screen
+            2*3+2+  // wifi circle plus margin
+            6),      // size of rectangle
+          CONFIG_HEIGHT-(
+            2+       // margin against edge of screen
+            6),      // size of rectangle
+          CONFIG_WIDTH-(
+            2+       // margin against edge of screen
+            2*3+2),  // wifi circle plus margin
+          CONFIG_HEIGHT-(
+            2),       // margin against edge of screen
+          lcd_state.bluetooth_connected ? BLUE : RED);
 
       memcpy(&last_rendered,&lcd_state,sizeof(lcd_state_t));
       memcpy(&last_style,&lcd_style,sizeof(lcd_style_t));

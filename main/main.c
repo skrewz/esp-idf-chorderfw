@@ -224,6 +224,7 @@ static void hidd_event_callback(esp_hidd_cb_event_t event, esp_hidd_cb_param_t *
                                          }
         case ESP_HIDD_EVENT_BLE_DISCONNECT: {
                                                 sec_conn = false;
+                                                lcd_state.bluetooth_connected = false;
                                                 ESP_LOGI(__FUNCTION__, "ESP_HIDD_EVENT_BLE_DISCONNECT");
                                                 esp_ble_gap_start_advertising(&hidd_adv_params);
                                                 xEventGroupSetBits(eventgroup_system,SYSTEM_CURRENTLY_ADVERTISING);
@@ -258,6 +259,7 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param
             break;
         case ESP_GAP_BLE_AUTH_CMPL_EVT:
             sec_conn = true;
+            lcd_state.bluetooth_connected = true;
             esp_bd_addr_t bd_addr;
             memcpy(bd_addr, param->ble_security.auth_cmpl.bd_addr, sizeof(esp_bd_addr_t));
             ESP_LOGI(__FUNCTION__, "remote BD_ADDR: %08x%04x",\
