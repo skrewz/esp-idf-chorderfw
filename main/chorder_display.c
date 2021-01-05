@@ -170,7 +170,7 @@ void render_display_task (void *pvParameters)
     if (ms_since_last_alert > 5000) {
       strcpy(lcd_state.alert,"");
     }
-    if (ms_since_last_update < 10000) {
+    if (ms_since_last_update < 30000) {
       lcdDisplayOn(&dev);
       lcdBacklightOn(&dev);
     } else {
