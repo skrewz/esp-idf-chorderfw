@@ -563,14 +563,14 @@ void handle_keystate_update_internally(uint8_t keyState, void (*symbol_handler)(
   switch (symbol) {
     case MOD_LSHIFT:
       is_shifted = !is_shifted;
-      is_numsymed = false;
+      //is_numsymed = false;
       return;
     case MOD_RSHIFT:
       is_shifted = !is_shifted;
-      is_numsymed = false;
+      //is_numsymed = false;
       return;
     case MODE_NUM:
-      is_shifted = false;
+      //is_shifted = false;
       is_numsymed = true;
       return;
     default:

@@ -294,7 +294,7 @@ symbol_t keymap[128][7] = { // {{{
   HID_KEY_SEMI_COLON       , // MODE==NUMSYM      for --N --RP  0x13 
   HID_KEY_RESERVED         , // MODE==FUNCTION    for --N --RP  0x13 
   HID_KEY_RESERVED         , // MODE==MOUSE       for --N --RP  0x13
-  ';'                      , // non-BLE shifted   for --N --RP  0x13 
+  ':'                      , // non-BLE shifted   for --N --RP  0x13 
   ';'                      , // non-BLE unshifted for --N --RP  0x13 
   ';'                      , // non-BLE numsymed  for --N --RP  0x13 
 },
@@ -393,7 +393,7 @@ symbol_t keymap[128][7] = { // {{{
   HID_KEY_SGL_QUOTE        , // MODE==NUMSYM      for --N IMR-  0x1E 
   HID_KEY_RESERVED         , // MODE==FUNCTION    for --N IMR-  0x1E 
   HID_KEY_RESERVED         , // MODE==MOUSE       for --N IMR-  0x1E
-  '\''                     , // non-BLE shifted   for --N IMR-  0x1E 
+  '"'                      , // non-BLE shifted   for --N IMR-  0x1E 
   '\''                     , // non-BLE unshifted for --N IMR-  0x1E 
   '\''                     , // non-BLE numsymed  for --N IMR-  0x1E 
 },
