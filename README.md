@@ -11,9 +11,9 @@ Features:
 
 * Connects to the compile-time configured wifi upon boot.
 * Boots up in "note taking mode," where one can submit notes to the compile-time configured URL using an enter key press.
-* Pressing both N and C (near thumb and centre thumb) while hitting R (ring) puts it into BLE keyboard mode. Fairly comprehensive chord set including control characters. [chords.md](https://github.com/skrewz/s-chorder/blob/master/chords.md) contains a reference.
-* Pressing both N and C while hitting M (middle) puts it into BLE Mouse mode. Vim-style movement commands apply.
-* Pressing N and C while hiting I (index) puts it into deep sleep. Kind of unnecessary, though—the thing times out and drops into deep sleep after some amount of inactivity.
+* Pressing both `N` and `C` (near thumb and centre thumb) while hitting `R` (ring) puts it into BLE keyboard mode. Fairly comprehensive chord set including control characters. [chords.md](https://github.com/skrewz/s-chorder/blob/master/chords.md) contains a reference.
+* Pressing both `N` and `C` while hitting `M` (middle) puts it into BLE Mouse mode. Vim-style movement commands apply.
+* Pressing `N` and `C` while hiting `I` (index) puts it into deep sleep. Kind of unnecessary, though—the thing times out and drops into deep sleep after some amount of inactivity.
 
 
 ## What should it do?
