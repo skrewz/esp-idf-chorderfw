@@ -603,6 +603,9 @@ void printing_handler(symbol_t symbol){
       break;
     default:
       if (symbol < 128) {
+        // Reset alert:
+        lcd_state.alert[0] = '\0';
+
         // Keep replacing the last character if we're at the buffer size:
         size_t pos = ((strlen(lcd_state.message) >= INTERNAL_BUFSIZE - 1) ? strlen(lcd_state.message)-1 : strlen(lcd_state.message));
         lcd_state.message[pos] = (char) symbol;

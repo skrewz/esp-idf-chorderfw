@@ -46,7 +46,7 @@ typedef struct {
 
 typedef struct {
   char message[INTERNAL_BUFSIZE];
-  char alert[INTERNAL_BUFSIZE];
+  char alert[ALERT_BUFSIZE];
   bool wifi_connected;
   bool bluetooth_connected;
 } lcd_state_t;
