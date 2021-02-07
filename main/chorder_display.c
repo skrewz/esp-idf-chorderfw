@@ -25,11 +25,14 @@ lcd_style_t lcd_style = {
   .foreground_color = RED,
   .alert_foreground_color = WHITE,
   .alert_background_color = RED,
+  .success_foreground_color = PURPLE,
+  .success_background_color = GREEN,
 };
 
 lcd_state_t lcd_state = { 
   .message = "",
   .alert = "",
+  .success = "",
   .wifi_connected = false,
   .bluetooth_connected = false,
 };
@@ -123,12 +126,12 @@ void render_display_task (void *pvParameters)
 {
   static lcd_state_t last_rendered;
   static lcd_style_t last_style;
-  static TickType_t last_alert_tick = 0;
+  static TickType_t last_popup_tick = 0;
 
   if (0 == display_timeout_last_activity)
     display_timeout_last_activity = xTaskGetTickCount();
-  if (0 == last_alert_tick)
-    last_alert_tick = xTaskGetTickCount();
+  if (0 == last_popup_tick)
+    last_popup_tick = xTaskGetTickCount();
 
 
   InitFontx(fx16G,"/spiffs/ILGH16XB.FNT",""); // 8x16Dot Gothic
@@ -153,10 +156,18 @@ void render_display_task (void *pvParameters)
       if (0 != strlen(lcd_state.alert)) {
         clear_lcd(lcd_style.alert_background_color);
         render_message(fx24G,lcd_style.alert_foreground_color,0,20,DIR_W_TO_E,(unsigned char *)lcd_state.alert);
-        last_alert_tick = xTaskGetTickCount();
-      } else {
+        last_popup_tick = xTaskGetTickCount();
+      }  else {
         clear_lcd(lcd_style.background_color);
-        render_message(fx16G,lcd_style.foreground_color,0,20,DIR_W_TO_E,(unsigned char *)lcd_state.message);
+        // If there's a success message, let's have it:
+        if (0 != strlen(lcd_state.success)) {
+          lcdDrawFillRect(&dev, 0, 0, CONFIG_WIDTH, CONFIG_HEIGHT/2,lcd_style.success_background_color);
+          lcdDrawFillRect(&dev, 0, 0, CONFIG_WIDTH, 16,lcd_style.success_background_color);
+          render_message(fx16G,lcd_style.success_foreground_color,0,20,DIR_W_TO_E,(unsigned char *)lcd_state.success);
+          last_popup_tick = xTaskGetTickCount();
+        } else {
+          render_message(fx16G,lcd_style.foreground_color,0,20,DIR_W_TO_E,(unsigned char *)lcd_state.message);
+        }
       }
 
       // 2 is margin from screen edge:
@@ -181,10 +192,11 @@ void render_display_task (void *pvParameters)
     }
 
     int ms_since_last_update = (xTaskGetTickCount()-display_timeout_last_activity)*portTICK_RATE_MS;
-    int ms_since_last_alert = (xTaskGetTickCount()-last_alert_tick)*portTICK_RATE_MS;
+    int ms_since_last_popup = (xTaskGetTickCount()-last_popup_tick)*portTICK_RATE_MS;
 
-    if (ms_since_last_alert > 5000) {
+    if (ms_since_last_popup > 5000) {
       strcpy(lcd_state.alert,"");
+      strcpy(lcd_state.success,"");
     }
     if (ms_since_last_update < 30000) {
       lcdDisplayOn(&dev);

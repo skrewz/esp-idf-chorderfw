@@ -540,8 +540,8 @@ bool opmode_switch_and_deepsleep_handler (uint8_t keyState)
       switch_to_opmode(OPMODE_NOTETAKING);
       return true;
     case MODE_DEEPSLEEP:
-      strcpy(lcd_state.alert,"Entering deep sleep now...");
-      vTaskDelay(1000 / portTICK_RATE_MS);
+      strcpy(lcd_state.success,"Entering deep sleep now...");
+      vTaskDelay(2000 / portTICK_RATE_MS);
       send_chorder_to_sleep();
       return true; // oughtn't actually matter; however, warnings
     default:
@@ -596,6 +596,7 @@ void printing_handler(symbol_t symbol){
       break;
     case '\n': // sending on enter key presses:
       if (send_off_note(lcd_state.message)) {
+        strcpy(lcd_state.success,"Sent note off");
         strcpy(lcd_state.message,"");
       } else {
         strcpy(lcd_state.alert,"Couldn't send note!");

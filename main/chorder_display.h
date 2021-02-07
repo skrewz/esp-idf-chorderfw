@@ -42,11 +42,14 @@ typedef struct {
   uint16_t foreground_color;
   uint16_t alert_foreground_color;
   uint16_t alert_background_color;
+  uint16_t success_foreground_color;
+  uint16_t success_background_color;
 } lcd_style_t;
 
 typedef struct {
   char message[INTERNAL_BUFSIZE];
   char alert[ALERT_BUFSIZE];
+  char success[SUCCESS_BUFSIZE];
   bool wifi_connected;
   bool bluetooth_connected;
 } lcd_state_t;

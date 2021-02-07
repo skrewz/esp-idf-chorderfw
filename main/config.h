@@ -33,6 +33,7 @@ typedef struct config_data {
 
 #define INTERNAL_BUFSIZE 200
 #define ALERT_BUFSIZE 100
+#define SUCCESS_BUFSIZE 100
 
 #define TAG "ST7789"
 
