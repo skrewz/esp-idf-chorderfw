@@ -1003,3 +1003,8 @@ void lcdBacklightOn(TFT_t * dev) {
 void lcdInversionOn(TFT_t * dev) {
 	spi_master_write_command(dev, 0x21);	//Display Inversion ON
 }
+void lcdSleep(TFT_t * dev)
+{
+  // Send the thing a SLPIN:
+  spi_master_write_command(dev, 0x10);
+}

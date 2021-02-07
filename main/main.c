@@ -301,6 +301,9 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param
 void send_chorder_to_sleep (void)
 {
   ESP_LOGI(__FUNCTION__,"Entering deep sleep now...");
+  lcdBacklightOff(&dev);
+  lcdDisplayOff(&dev);
+  lcdSleep(&dev);
   if (ESP_OK != esp_hidd_profile_deinit())
   {
     ESP_LOGE(__FUNCTION__,"Failure: esp_hidd_profile_deinit()");
