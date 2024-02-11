@@ -140,7 +140,7 @@ symbol_t keymap[128][7] = { // {{{
   HID_KEY_Y                , // MODE==ALPHA       for --- --R-  0x02 
   HID_KEY_4                , // MODE==NUMSYM      for --- --R-  0x02 
   HID_KEY_F4               , // MODE==FUNCTION    for --- --R-  0x02 
-  BLEMOUSE_UP              , // MODE==MOUSE       for --- --R-  0x02
+  BLEMOUSE_DOWN            , // MODE==MOUSE       for --- --R-  0x02
   'Y'                      , // non-BLE shifted   for --- --R-  0x02 
   'y'                      , // non-BLE unshifted for --- --R-  0x02 
   '4'                      , // non-BLE numsymed  for --- --R-  0x02 
@@ -158,7 +158,7 @@ symbol_t keymap[128][7] = { // {{{
   HID_KEY_R                , // MODE==ALPHA       for --- -M--  0x04 
   HID_KEY_3                , // MODE==NUMSYM      for --- -M--  0x04 
   HID_KEY_F3               , // MODE==FUNCTION    for --- -M--  0x04 
-  BLEMOUSE_DOWN            , // MODE==MOUSE       for --- -M--  0x04
+  BLEMOUSE_UP              , // MODE==MOUSE       for --- -M--  0x04
   'R'                      , // non-BLE shifted   for --- -M--  0x04 
   'r'                      , // non-BLE unshifted for --- -M--  0x04 
   '3'                      , // non-BLE numsymed  for --- -M--  0x04 
