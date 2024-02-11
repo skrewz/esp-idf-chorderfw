@@ -1141,12 +1141,19 @@ void app_main(void)
     esp_hidd_register_callbacks(hidd_event_callback);
 
     /* set the security iocap & auth_req & key size & init key response key parameters to the stack*/
-    esp_ble_auth_req_t auth_req = ESP_LE_AUTH_BOND;     //bonding with peer device after authentication
+    // Off of security advice on
+    // https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/bluetooth/esp_gap_ble.html#_CPPv4N22esp_gap_ble_cb_event_t37ESP_GAP_BLE_ADV_DATA_SET_COMPLETE_EVTE:
+    //
+    esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_SC_ONLY | ESP_LE_AUTH_BOND;     //bonding with peer device after authentication
     esp_ble_io_cap_t iocap = ESP_IO_CAP_NONE;           //set the IO capability to No output No input
     uint8_t key_size = 16;      //the key size should be 7~16 bytes
     uint8_t init_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
     uint8_t rsp_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
-    esp_ble_gap_set_security_param(ESP_BLE_SM_AUTHEN_REQ_MODE, &auth_req, sizeof(uint8_t));
+    esp_ble_gap_set_security_param(ESP_BLE_SM_AUTHEN_REQ_MODE, &auth_req, sizeof(esp_ble_auth_req_t));
+
+    esp_ble_auth_req_t specified_auth = ESP_BLE_ONLY_ACCEPT_SPECIFIED_AUTH_ENABLE;
+    esp_ble_gap_set_security_param(ESP_BLE_SM_ONLY_ACCEPT_SPECIFIED_SEC_AUTH, &specified_auth, sizeof(esp_ble_auth_req_t));
+
     esp_ble_gap_set_security_param(ESP_BLE_SM_IOCAP_MODE, &iocap, sizeof(uint8_t));
     esp_ble_gap_set_security_param(ESP_BLE_SM_MAX_KEY_SIZE, &key_size, sizeof(uint8_t));
     /* If your BLE device act as a Slave, the init_key means you hope which types of key of the master should distribute to you,
