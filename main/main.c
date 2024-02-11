@@ -19,8 +19,8 @@
 #include "esp_gatt_defs.h"
 #include "esp_bt_main.h"
 #include "esp_bt_device.h"
-#include "esp_int_wdt.h"
 #include "esp_tls.h"
+#include "esp_timer.h"
 #include "esp_sleep.h"
 #include "esp_http_client.h"
 
@@ -144,13 +144,7 @@ static uint8_t hidd_service_uuid128[] = {
 // {{{
 
 
-TFT_t dev;
-FontxFile fx16G[2],
- fx24G[2],
- fx32G[2],
- fx16M[2],
- fx24M[2],
- fx32M[2];
+extern TFT_t dev;
 
 // }}}
 
@@ -206,7 +200,7 @@ static void hidd_event_callback(esp_hidd_cb_event_t event, esp_hidd_cb_param_t *
         case ESP_HIDD_EVENT_REG_FINISH: {
                                             if (param->init_finish.state == ESP_HIDD_INIT_OK) {
                                                 //esp_bd_addr_t rand_addr = {0x04,0x11,0x11,0x11,0x11,0x05};
-                                                esp_ble_gap_set_device_name(config.bt_device_name);
+                                                esp_bt_dev_set_device_name(config.bt_device_name);
                                                 esp_ble_gap_config_adv_data(&hidd_adv_data);
                                             }
                                             break;
@@ -444,7 +438,7 @@ bool send_off_note(char *note)
   /* printf("Certificate Verification Failure Reason: %s\n", buf); */
 
   if (err == ESP_OK) {
-    ESP_LOGI(__FUNCTION__, "Status = %d, content_length = %d",
+    ESP_LOGI(__FUNCTION__, "Status = %d, content_length = %lld",
         esp_http_client_get_status_code(client),
         esp_http_client_get_content_length(client));
   }
@@ -544,7 +538,7 @@ bool opmode_switch_and_deepsleep_handler (uint8_t keyState)
       return true;
     case MODE_DEEPSLEEP:
       strcpy(lcd_state.success,"Entering deep sleep now...");
-      vTaskDelay(2000 / portTICK_RATE_MS);
+      vTaskDelay(2000 / portTICK_PERIOD_MS);
       send_chorder_to_sleep();
       return true; // oughtn't actually matter; however, warnings
     default:
@@ -934,9 +928,9 @@ void sleep_mode_task (void *pvParameters)
     display_timeout_last_activity = xTaskGetTickCount();
 
   while (1) {
-    vTaskDelay(1000 / portTICK_RATE_MS);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
 
-    int ms_since_last_update = (xTaskGetTickCount()-display_timeout_last_activity)*portTICK_RATE_MS;
+    int ms_since_last_update = (xTaskGetTickCount()-display_timeout_last_activity)*portTICK_PERIOD_MS;
 
     if (ms_since_last_update > MS_BEFORE_SLEEP) {
       send_chorder_to_sleep();
@@ -1033,7 +1027,7 @@ void watch_for_key_changes (void *pvParameters)
             previousStableReading = currentStableReading;
         }
         lastKeyState = keyState;
-        vTaskDelay(10 / portTICK_RATE_MS);
+        vTaskDelay(10 / portTICK_PERIOD_MS);
     }
 }
 

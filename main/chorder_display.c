@@ -143,7 +143,7 @@ void render_display_task (void *pvParameters)
   InitFontx(fx32M,"/spiffs/ILMH32XB.FNT",""); // 16x32Dot Mincyo
 
   while (1) {
-    vTaskDelay(100 / portTICK_RATE_MS);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
 
 
     // Compare with last display state to stop excessive blinking while re-rendering:
@@ -191,8 +191,8 @@ void render_display_task (void *pvParameters)
       memcpy(&last_style,&lcd_style,sizeof(lcd_style_t));
     }
 
-    int ms_since_last_update = (xTaskGetTickCount()-display_timeout_last_activity)*portTICK_RATE_MS;
-    int ms_since_last_popup = (xTaskGetTickCount()-last_popup_tick)*portTICK_RATE_MS;
+    int ms_since_last_update = (xTaskGetTickCount()-display_timeout_last_activity)*portTICK_PERIOD_MS;
+    int ms_since_last_popup = (xTaskGetTickCount()-last_popup_tick)*portTICK_PERIOD_MS;
 
     if (ms_since_last_popup > 5000) {
       strcpy(lcd_state.alert,"");
