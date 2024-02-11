@@ -238,6 +238,48 @@ static void hidd_event_callback(esp_hidd_cb_event_t event, esp_hidd_cb_param_t *
     return;
 }
 
+// Off of https://github.com/espressif/esp-idf/blob/master/examples/bluetooth/bluedroid/ble_50/ble50_security_server/tutorial/ble50_security_server_Example_Walkthrough.md :
+static char *esp_key_type_to_str(esp_ble_key_type_t key_type)
+{
+   char *key_str = NULL;
+   switch(key_type) {
+    case ESP_LE_KEY_NONE:
+        key_str = "ESP_LE_KEY_NONE";
+        break;
+    case ESP_LE_KEY_PENC:
+        key_str = "ESP_LE_KEY_PENC";
+        break;
+    case ESP_LE_KEY_PID:
+        key_str = "ESP_LE_KEY_PID";
+        break;
+    case ESP_LE_KEY_PCSRK:
+        key_str = "ESP_LE_KEY_PCSRK";
+        break;
+    case ESP_LE_KEY_PLK:
+        key_str = "ESP_LE_KEY_PLK";
+        break;
+    case ESP_LE_KEY_LLK:
+        key_str = "ESP_LE_KEY_LLK";
+        break;
+    case ESP_LE_KEY_LENC:
+        key_str = "ESP_LE_KEY_LENC";
+        break;
+    case ESP_LE_KEY_LID:
+        key_str = "ESP_LE_KEY_LID";
+        break;
+    case ESP_LE_KEY_LCSRK:
+        key_str = "ESP_LE_KEY_LCSRK";
+        break;
+    default:
+        key_str = "INVALID BLE KEY TYPE";
+        break;
+
+   }
+
+   return key_str;
+}
+
+
 static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
 {
     switch (event) {
@@ -250,6 +292,14 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param
                 ESP_LOGD(__FUNCTION__, "%x:",param->ble_security.ble_req.bd_addr[i]);
             }
             esp_ble_gap_security_rsp(param->ble_security.ble_req.bd_addr, true);
+            break;
+      case ESP_GAP_BLE_PASSKEY_NOTIF_EVT:    
+        // show the passkey number to the user to input it in the peer device.
+        sprintf((char *)lcd_state.alert,"Passkey notify number: %lu",param->ble_security.key_notif.passkey);
+        break;
+      case ESP_GAP_BLE_KEY_EVT:
+            //shows the ble key info share with peer device to the user.
+            ESP_LOGI(__FUNCTION__, "key type = %s", esp_key_type_to_str(param->ble_security.ble_key.key_type));
             break;
         case ESP_GAP_BLE_AUTH_CMPL_EVT:
             sec_conn = true;
@@ -281,6 +331,7 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param
 #endif
             break;
         default:
+            ESP_LOGI(__FUNCTION__,"received event of type %u", event);
             break;
     }
 }
@@ -309,10 +360,6 @@ void send_chorder_to_sleep (void)
   if (ESP_OK != esp_bluedroid_deinit())
   {
     ESP_LOGE(__FUNCTION__,"Failure: esp_bluedroid_deinit()");
-  }
-  if (ESP_OK != esp_bt_controller_disable())
-  {
-    ESP_LOGE(__FUNCTION__,"Failure: esp_bt_controller_disable()");
   }
   if (ESP_OK != esp_wifi_disconnect())
   {
@@ -387,6 +434,9 @@ bool send_off_note(char *note)
   esp_err_t _http_event_handle(esp_http_client_event_t *evt)
   {
     switch(evt->event_id) {
+      case HTTP_EVENT_REDIRECT:
+        ESP_LOGI(__FUNCTION__, "HTTP_EVENT_REDIRECT");
+        break;
       case HTTP_EVENT_ERROR:
         ESP_LOGI(__FUNCTION__, "HTTP_EVENT_ERROR");
         break;
@@ -832,7 +882,7 @@ void handle_keystate_update_as_ble_mouse(uint8_t keyState){
   static keymap_t lastKey = 0;
   
   if (lastKey == theKey) {
-    jump = 127 > 2 * jump ? 2 * jump : 127;
+    jump = 127 > 3 * jump ? 3 * jump : 127;
   } else {
     jump = 1;
   }
@@ -1137,9 +1187,11 @@ void app_main(void)
     /* set the security iocap & auth_req & key size & init key response key parameters to the stack*/
     // Off of security advice on
     // https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/bluetooth/esp_gap_ble.html#_CPPv4N22esp_gap_ble_cb_event_t37ESP_GAP_BLE_ADV_DATA_SET_COMPLETE_EVTE:
-    //
-    esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_SC_ONLY | ESP_LE_AUTH_BOND;     //bonding with peer device after authentication
-    esp_ble_io_cap_t iocap = ESP_IO_CAP_NONE;           //set the IO capability to No output No input
+    // See also https://github.com/espressif/esp-idf/blob/master/examples/bluetooth/bluedroid/ble_50/ble50_security_server/tutorial/ble50_security_server_Example_Walkthrough.md
+
+    esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_SC_BOND | ESP_LE_AUTH_BOND;
+    // Setting the IO capability to output only. While this _is_ a keyboard, uhm, yeah, keeping it simple:
+    esp_ble_io_cap_t iocap = ESP_IO_CAP_OUT;
     uint8_t key_size = 16;      //the key size should be 7~16 bytes
     uint8_t init_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
     uint8_t rsp_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
